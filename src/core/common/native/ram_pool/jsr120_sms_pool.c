@@ -1,6 +1,5 @@
 /*
  *
- *
  * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
@@ -30,10 +29,10 @@
 #include <jsr120_sms_pool.h>
 #include <jsr120_sms_listeners.h>
 #include <pcsl_memory.h>
-#include <suitestore_common.h>
 
 #define MAGIC_COOKEY_FOR_SMS_RECEIPT 0x7a
 #define MAGIC_COOKEY_FOR_SMS_RECEIPT_PORT 1
+
 
 /*
  * SMSPool data members
@@ -87,12 +86,9 @@ SmsMessage* jsr120_sms_new_msg(jchar	  encodingType,
                                jchar	  msgLen,
                                unsigned char* msgBuffer) {
 
-	SmsMessage *sms = (SmsMessage*)pcsl_mem_malloc(sizeof(SmsMessage));
-	memset(sms, 0, sizeof(SmsMessage));
+    SmsMessage *sms = (SmsMessage*)pcsl_mem_malloc(sizeof(SmsMessage) + msgLen - 1);
 
-	sms->msgAddr = (char*)pcsl_mem_malloc(MAX_ADDR_LEN);
-	sms->msgBuffer = (char*)pcsl_mem_malloc(msgLen);
-
+    memset(sms, 0, sizeof(SmsMessage) + msgLen - 1);
     sms->encodingType  = encodingType;
     sms->sourcePortNum = sourcePortNum;
     sms->destPortNum   = destPortNum;
@@ -134,16 +130,16 @@ void jsr120_sms_copy_msg(SmsMessage* src, SmsMessage* dst) {
  */
 SmsMessage* jsr120_sms_dup_msg(SmsMessage* sms) {
 
-    if (sms == NULL) {
+    if (sms == NULL) { 
         return NULL;
     }
     return jsr120_sms_new_msg(sms->encodingType,
-                              (unsigned char*)sms->msgAddr,
+                              sms->msgAddr,
                               sms->sourcePortNum,
                               sms->destPortNum,
                               sms->timeStamp,
                               sms->msgLen,
-                              (unsigned char*)sms->msgBuffer);
+                              sms->msgBuffer);
 }
 
 /**
@@ -154,7 +150,7 @@ SmsMessage* jsr120_sms_dup_msg(SmsMessage* sms) {
  */
 void jsr120_sms_delete_msg(SmsMessage* sms) {
 
-    if (sms) {
+    if (sms) { 
         pcsl_mem_free(sms->msgAddr);
         pcsl_mem_free(sms->msgBuffer);
         pcsl_mem_free(sms);
@@ -203,11 +199,11 @@ static void jsr120_sms_pool_increase_count() {
 /**
  * Decrease the number of messages in the pool by one.
  */
-static void jsr120_sms_pool_decrease_count()     {
-    SMSPool_count--;
-    if (SMSPool_count < 0) {
-        SMSPool_count = 0;
-    }
+static void jsr120_sms_pool_decrease_count()     { 
+    SMSPool_count--; 
+    if (SMSPool_count < 0) { 
+        SMSPool_count = 0; 
+    } 
 }
 
 /**
@@ -238,23 +234,23 @@ static void jsr120_sms_pool_check_pool_quota() {
  *
  * @param message The SMS message to be added.
  *
- * @return <code>WMA_OK</code> if the message was successfully added to the pool;
- *	<code>WMA_ERR</code>, otherwise.
+ * @return <code>JSR120_OK</code> if the message was successfully added to the pool;
+ *	<code>JSR120_ERR</code>, otherwise.
  *
  */
-WMA_STATUS jsr120_sms_pool_add_msg(SmsMessage* smsMessage) {
+JSR120_STATUS jsr120_sms_pool_add_msg(SmsMessage* smsMessage) {
     ListElement* newItem;
 
-    if (smsMessage == NULL) { return WMA_ERR;}
+    if (smsMessage == NULL) { return JSR120_ERR;}
 
     jsr120_sms_pool_check_pool_quota();
-
-    newItem = jsr120_list_new_by_number(NULL, smsMessage->destPortNum,
-        UNUSED_SUITE_ID, (void*)smsMessage, 0);
+    
+    newItem = jsr120_list_new_by_number(NULL, smsMessage->destPortNum, NULL, 
+                               (void*)smsMessage, 0);
     jsr120_list_add_last(&SMSPool_smsMessages, newItem);
     jsr120_sms_pool_increase_count();
     jsr120_sms_message_arrival_notifier(smsMessage);
-    return WMA_OK;
+    return JSR120_OK;
 }
 
 /**
@@ -265,10 +261,10 @@ WMA_STATUS jsr120_sms_pool_add_msg(SmsMessage* smsMessage) {
  * @param smsPort the destination SMS port to look for
  * @param out Space for the message.
  *
- * @return <code>WMA_OK</code> if a message could be located;
- *	<code>WMA_ERR</code>, otherwise.
+ * @return <code>JSR120_OK</code> if a message could be located;
+ *	<code>JSR120_ERR</code>, otherwise.
  */
-WMA_STATUS jsr120_sms_pool_get_next_msg(jchar smsPort, SmsMessage* out) {
+JSR120_STATUS jsr120_sms_pool_get_next_msg(jchar smsPort, SmsMessage* out) {
 
     SmsMessage* sms = jsr120_sms_pool_retrieve_next_msg(smsPort);
     if (sms) {
@@ -277,7 +273,7 @@ WMA_STATUS jsr120_sms_pool_get_next_msg(jchar smsPort, SmsMessage* out) {
         }
         jsr120_sms_delete_msg(sms);
     }
-    return ((sms != NULL) ? WMA_OK : WMA_ERR);
+    return ((sms != NULL) ? JSR120_OK : JSR120_ERR);
 }
 
 /**
@@ -294,7 +290,7 @@ SmsMessage* jsr120_sms_pool_retrieve_next_msg(jchar smsPort) {
 
     SmsMessage* result = NULL;
     ListElement* e;
-
+    
     e = jsr120_list_remove_first_by_number(&SMSPool_smsMessages,smsPort);
     if (e) {
         jsr120_sms_pool_decrease_count();
@@ -312,10 +308,10 @@ SmsMessage* jsr120_sms_pool_retrieve_next_msg(jchar smsPort) {
  *
  * @param smsPort The SMS port to be matched.
  *
- * @return <code>WMA_OK</code> when a message was removed;
- *	<code>WMA_ERR</code>, otherwise.
+ * @return <code>JSR120_OK</code> when a message was removed;
+ *	<code>JSR120_ERR</code>, otherwise.
  */
-WMA_STATUS jsr120_sms_pool_remove_next_msg(jchar smsPort) {
+JSR120_STATUS jsr120_sms_pool_remove_next_msg(jchar smsPort) {
 
     return jsr120_sms_pool_get_next_msg(smsPort, NULL);
 }
@@ -326,7 +322,7 @@ WMA_STATUS jsr120_sms_pool_remove_next_msg(jchar smsPort) {
  * @param msgID The SMS port number to be matched.
  */
 void jsr120_sms_pool_remove_all_msgs(jchar smsPort) {
-    while(jsr120_sms_pool_remove_next_msg(smsPort) == WMA_OK);
+    while(jsr120_sms_pool_remove_next_msg(smsPort) == JSR120_OK);
 }
 
 /**
@@ -362,21 +358,21 @@ SmsMessage* jsr120_sms_pool_peek_next_msg1(jchar smsPort, jint isNew) {
 /**
  * Deletes the oldest SMS message.
  *
- * @return <code>WMA_OK</code> if the oldest message was found and deleted;
- *	<code>WMA_ERR</code>, otherwise.
+ * @return <code>JSR120_OK</code> if the oldest message was found and deleted;
+ *	<code>JSR120_ERR</code>, otherwise.
  */
-WMA_STATUS jsr120_sms_pool_delete_next_msg() {
+JSR120_STATUS jsr120_sms_pool_delete_next_msg() {
 
-    WMA_STATUS found = WMA_ERR;
+    JSR120_STATUS found = JSR120_ERR;
     ListElement* e;
-
+    
     e = jsr120_list_remove_first(&SMSPool_smsMessages);
     if (e) {
         SmsMessage* sms = e->userData;
         jsr120_sms_delete_msg(sms);
         jsr120_sms_pool_decrease_count();
         jsr120_list_destroy(e);
-        found = WMA_OK;
+        found = JSR120_OK;
     }
     return found;
 }

@@ -1,5 +1,4 @@
 /*
- *   
  *
  * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
@@ -56,7 +55,7 @@ class WMASocket : public QObject
     Q_OBJECT
 
 public:
-    WMASocket(WMA_PROTOCOLS protocol, int fd, QObject *parent=0, const char* name=0);
+    WMASocket(JSR120_PROTOCOLS protocol, int fd, QObject *parent=0, const char* name=0);
     ~WMASocket();
 
     QSocketNotifier* getReadNotifier()	{ return readNotifier; }
@@ -71,7 +70,7 @@ public slots:
 protected:
     QSocketNotifier* readNotifier;
     QSocketNotifier* writeNotifier;
-    WMA_PROTOCOLS sockProtocol;
+    JSR120_PROTOCOLS sockProtocol;
     int	sockFD;
 
 };
@@ -85,7 +84,7 @@ protected:
  *
  * @return the platform-specific handle; 0 if there was an error
  */
-long wmaCreateSocketHandle(WMA_PROTOCOLS protocol, int fd);
+long wmaCreateSocketHandle(JSR120_PROTOCOLS protocol, int fd);
 
 /**
  * Gets the platform-specific file descriptor associated with the

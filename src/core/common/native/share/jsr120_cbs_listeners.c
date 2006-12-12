@@ -1,6 +1,5 @@
 /*
  *
- *
  * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
@@ -32,7 +31,6 @@
 #include <midp_thread.h>
 #include <midpServices.h>
 #include <push_server_export.h>
-#include <suitestore_common.h>
 #include <jsr120_list_element.h>
 #include <jsr120_cbs_pool.h>
 #include <jsr120_cbs_listeners.h>
@@ -51,26 +49,26 @@ static ListElement* cbs_push_listeners = NULL;
 /*
  * General form of a CBS listener.
  */
-typedef WMA_STATUS cbs_listener_t(CbsMessage* message, void* userData);
+typedef JSR120_STATUS cbs_listener_t(CbsMessage* message, void* userData);
 
 /*
  * private methods
  */
-static WMA_STATUS jsr120_cbs_midlet_listener(CbsMessage *message,
+static JSR120_STATUS jsr120_cbs_midlet_listener(CbsMessage *message,
     void* userData);
-static WMA_STATUS jsr120_cbs_push_listener(CbsMessage *message,
+static JSR120_STATUS jsr120_cbs_push_listener(CbsMessage *message,
     void* userData);
-static WMA_STATUS jsr120_cbs_invoke_listeners(CbsMessage* message,
+static JSR120_STATUS jsr120_cbs_invoke_listeners(CbsMessage* message,
     ListElement *listeners);
 static JVMSPI_ThreadID jsr120_cbs_get_blocked_thread_from_handle(long handle,
     jint waitingFor);
-static WMA_STATUS jsr120_cbs_is_msgID_registered(jchar msgID,
+static JSR120_STATUS jsr120_cbs_is_msgID_registered(jchar msgID,
     ListElement *listeners);
-static WMA_STATUS jsr120_cbs_register_msgID(jchar msgID, SuiteIdType msid,
+static JSR120_STATUS jsr120_cbs_register_msgID(jchar msgID, unsigned char* msid,
     cbs_listener_t* listener, void* userData, ListElement **listeners);
-static WMA_STATUS jsr120_cbs_unregister_msgID(jchar msgID,
+static JSR120_STATUS jsr120_cbs_unregister_msgID(jchar msgID,
     cbs_listener_t* listener, ListElement **listeners);
-static void jsr120_cbs_delete_all_msgs(SuiteIdType msid, ListElement* head);
+static void jsr120_cbs_delete_midlet_suite_msgs(unsigned char* msid, ListElement** head);
 
 /**
  * Invoke registered listeners that match the msgID specified in the CBS
@@ -81,14 +79,14 @@ static void jsr120_cbs_delete_all_msgs(SuiteIdType msid, ListElement* head);
  *
  * @result returns true if a matching listener is invoked, false
  *                 otherwise
- */
-static WMA_STATUS jsr120_cbs_invoke_listeners(CbsMessage* message,
+ */  
+static JSR120_STATUS jsr120_cbs_invoke_listeners(CbsMessage* message,
     ListElement *listeners) {
 
     ListElement* callback;
 
     /* Assume no listeners were found and threads unblocked */
-    WMA_STATUS unblocked = WMA_ERR;
+    JSR120_STATUS unblocked = JSR120_ERR;
 
     /* Notify all listeners that match the given port (Message ID) */
     for(callback=jsr120_list_get_by_number(listeners, message->msgID);
@@ -99,8 +97,8 @@ static WMA_STATUS jsr120_cbs_invoke_listeners(CbsMessage* message,
 	cbs_listener_t* listener=(cbs_listener_t*)(callback->userDataCallback);
 
 	if (listener!=NULL) {
-            if((unblocked =
-                listener(message, callback->userData)) == WMA_OK) {
+            if((unblocked = 
+                listener(message, callback->userData)) == JSR120_OK) {
                 /*
                  * A thread blocked on receiving a message has been unblocked.
                  * So return.
@@ -118,7 +116,7 @@ static WMA_STATUS jsr120_cbs_invoke_listeners(CbsMessage* message,
  */
 void jsr120_cbs_message_arrival_notifier(CbsMessage* message) {
 
-    WMA_STATUS unblocked = WMA_ERR;
+    JSR120_STATUS unblocked = JSR120_ERR;
 
     /*
      * First invoke listeners for current midlet
@@ -130,7 +128,7 @@ void jsr120_cbs_message_arrival_notifier(CbsMessage* message) {
     /*
      * If a listener hasn't been invoked, try the push Listeners
      */
-    if (unblocked == WMA_ERR && cbs_push_listeners != NULL) {
+    if (unblocked == JSR120_ERR && cbs_push_listeners != NULL) {
         unblocked = jsr120_cbs_invoke_listeners(message, cbs_push_listeners);
     }
 }
@@ -138,15 +136,15 @@ void jsr120_cbs_message_arrival_notifier(CbsMessage* message) {
 /*
  * See jsr120_cbs_listeners.h for documentation
  */
-WMA_STATUS jsr120_cbs_is_midlet_msgID_registered(jchar msgID) {
+JSR120_STATUS jsr120_cbs_is_midlet_msgID_registered(jchar msgID) {
     return jsr120_cbs_is_msgID_registered(msgID, cbs_midlet_listeners);
 }
 
 /*
  * See jsr120_cbs_listeners.h for documentation
  */
-WMA_STATUS jsr120_cbs_register_midlet_msgID(jchar msgID,
-    SuiteIdType msid, jint handle) {
+JSR120_STATUS jsr120_cbs_register_midlet_msgID(jchar msgID,
+    unsigned char *msid, jint handle) {
 
     return jsr120_cbs_register_msgID(msgID, msid, jsr120_cbs_midlet_listener,
         (void *)handle, &cbs_midlet_listeners);
@@ -155,7 +153,7 @@ WMA_STATUS jsr120_cbs_register_midlet_msgID(jchar msgID,
 /*
  * See jsr120_cbs_listeners.h for documentation
  */
-WMA_STATUS jsr120_cbs_unregister_midlet_msgID(jchar msgID) {
+JSR120_STATUS jsr120_cbs_unregister_midlet_msgID(jchar msgID) {
 
     return jsr120_cbs_unregister_msgID(msgID, jsr120_cbs_midlet_listener,
         &cbs_midlet_listeners);
@@ -164,14 +162,14 @@ WMA_STATUS jsr120_cbs_unregister_midlet_msgID(jchar msgID) {
 /*
  * See jsr120_cbs_listeners.h for documentation
  */
-WMA_STATUS jsr120_cbs_is_push_msgID_registered(jchar msgID) {
+JSR120_STATUS jsr120_cbs_is_push_msgID_registered(jchar msgID) {
     return jsr120_cbs_is_msgID_registered(msgID, cbs_push_listeners);
 }
 
 /*
  * See jsr120_cbs_listeners.h for documentation
  */
-WMA_STATUS jsr120_cbs_register_push_msgID(jchar msgID, SuiteIdType msid,
+JSR120_STATUS jsr120_cbs_register_push_msgID(jchar msgID, unsigned char *msid,
     jint handle) {
 
     return jsr120_cbs_register_msgID(msgID, msid, jsr120_cbs_push_listener,
@@ -181,7 +179,7 @@ WMA_STATUS jsr120_cbs_register_push_msgID(jchar msgID, SuiteIdType msid,
 /*
  * See jsr120_cbs_listeners.h for documentation
  */
-WMA_STATUS jsr120_cbs_unregister_push_msgID(jchar msgID) {
+JSR120_STATUS jsr120_cbs_unregister_push_msgID(jchar msgID) {
     return jsr120_cbs_unregister_msgID(msgID, jsr120_cbs_push_listener,
         &cbs_push_listeners);
 }
@@ -189,15 +187,15 @@ WMA_STATUS jsr120_cbs_unregister_push_msgID(jchar msgID) {
 /*
  * See jsr120_cbs_listeners.h for documentation
  */
-WMA_STATUS jsr120_cbs_unblock_thread(jint handle, jint waitingFor) {
+JSR120_STATUS jsr120_cbs_unblock_thread(jint handle, jint waitingFor) {
     JVMSPI_ThreadID id =
         jsr120_cbs_get_blocked_thread_from_handle((long)handle, waitingFor);
     if (id != 0) {
 	midp_thread_unblock(id);
-	return WMA_OK;
+	return JSR120_OK;
     }
 
-    return WMA_ERR;
+    return JSR120_ERR;
 }
 
 /**
@@ -253,10 +251,10 @@ jsr120_cbs_get_blocked_thread_from_handle(long handle, jint waitingFor) {
  * @param userData A pointer to user data, if any, that was cached in the
  *     in-box. This is data that was passed to the in-box, when a port is
  *     registered with it. Usually a handle to the open connection.
- * @return <code>WMA_OK</code> if a waiting thread is successfully unblocked;
- *     <code>WMA_ERR</code>, otherwise.
+ * @return <code>JSR120_OK</code> if a waiting thread is successfully unblocked;
+ *     <code>JSR120_ERR</code>, otherwise.
  */
-static WMA_STATUS jsr120_cbs_midlet_listener(CbsMessage* message, void* userData) {
+static JSR120_STATUS jsr120_cbs_midlet_listener(CbsMessage* message, void* userData) {
     (void)message;
 
     /** unblock the receiver thread here */
@@ -273,10 +271,10 @@ static WMA_STATUS jsr120_cbs_midlet_listener(CbsMessage* message, void* userData
  * @param userData A pointer to user data, if any, that was cached in the in-box.
  *     This is data that was passed to the in-box, when a port is registered with
  *     it. Usually a handle to the open connection.
- * @return <code>WMA_OK</code> if a waiting thread is successfully unblocked;
- *     <code>WMA_ERR</code>, otherwise.
+ * @return <code>JSR120_OK</code> if a waiting thread is successfully unblocked;
+ *     <code>JSR120_ERR</code>, otherwise.
  */
-static WMA_STATUS jsr120_cbs_push_listener(CbsMessage* message, void* userData)
+static JSR120_STATUS jsr120_cbs_push_listener(CbsMessage* message, void* userData)
 {
     (void)message;
 
@@ -305,17 +303,17 @@ static WMA_STATUS jsr120_cbs_push_listener(CbsMessage* message, void* userData)
  * @param userData Any special data associated with the listener.
  * @param listeners List of listeners in which to be registered.
  *
- * @return <code>WMA_OK</code> if successful; <code>WMA_ERR</code> if the
+ * @return <code>JSR120_OK</code> if successful; <code>JSR120_ERR</code> if the
  *     identifier has already been registered or if native registration failed.
  */
-static WMA_STATUS jsr120_cbs_register_msgID(jchar msgID,
-    SuiteIdType msid, cbs_listener_t* listener, void* userData,
+static JSR120_STATUS jsr120_cbs_register_msgID(jchar msgID,
+    unsigned char *msid, cbs_listener_t* listener, void* userData,
     ListElement **listeners) {
 
     /* Assume no success in registering the message ID. */
-    WMA_STATUS ok = WMA_ERR;
+    JSR120_STATUS ok = JSR120_ERR;
 
-    if (jsr120_cbs_is_msgID_registered(msgID, *listeners) == WMA_ERR) {
+    if (jsr120_cbs_is_msgID_registered(msgID, *listeners) == JSR120_ERR) {
 	ok = jsr120_add_cbs_listening_msgID(msgID);
 	jsr120_list_new_by_number(listeners, msgID, msid, userData, (void*)listener);
     }
@@ -333,19 +331,19 @@ static WMA_STATUS jsr120_cbs_register_msgID(jchar msgID,
  * @param userData    Any special data associated with the listener.
  * @param listeners List of listeners from which to be unregistered.
  *
- * @return <code>WMA_OK</code> if successful; <code>WMA_ERR</code>,
+ * @return <code>JSR120_OK</code> if successful; <code>JSR120_ERR</code>,
  *     otherwise.
  */
-static WMA_STATUS jsr120_cbs_unregister_msgID(jchar msgID,
+static JSR120_STATUS jsr120_cbs_unregister_msgID(jchar msgID,
     cbs_listener_t* listener, ListElement **listeners) {
 
     /* Assume no success in unregistering the message ID */
-    WMA_STATUS ok = WMA_ERR;
+    JSR120_STATUS ok = JSR120_ERR;
 
-    if (jsr120_cbs_is_msgID_registered(msgID, *listeners) == WMA_OK) {
+    if (jsr120_cbs_is_msgID_registered(msgID, *listeners) == JSR120_OK) {
 
 	jsr120_list_unregister_by_number(listeners, msgID, (void*)listener);
-	if (jsr120_cbs_is_msgID_registered(msgID, *listeners) == WMA_ERR) {
+	if (jsr120_cbs_is_msgID_registered(msgID, *listeners) == JSR120_ERR) {
             ok = jsr120_remove_cbs_listening_msgID(msgID);
 	}
 
@@ -359,14 +357,14 @@ static WMA_STATUS jsr120_cbs_unregister_msgID(jchar msgID,
  * @param msgID	The message identifier to be matched.
  * @param listeners List of listeners to check.
  *
- * @return <code>WMA_OK</code> if the message identifier has an associated
- *     listener; <code>WMA_ERR</code>, otherwise.
+ * @return <code>JSR120_OK</code> if the message identifier has an associated
+ *     listener; <code>JSR120_ERR</code>, otherwise.
  *
  */
-static WMA_STATUS jsr120_cbs_is_msgID_registered(jchar msgID,
+static JSR120_STATUS jsr120_cbs_is_msgID_registered(jchar msgID,
     ListElement *listeners) {
 
-    return jsr120_list_get_by_number(listeners, msgID) != NULL ? WMA_OK : WMA_ERR;
+    return jsr120_list_get_by_number(listeners, msgID) != NULL ? JSR120_OK : JSR120_ERR;
 }
 
 /**
@@ -375,8 +373,8 @@ static WMA_STATUS jsr120_cbs_is_msgID_registered(jchar msgID,
  *
  * @param msid The MIDlet suite identifier.
  */
-void jsr120_cbs_delete_midlet_suite_msg(SuiteIdType msid) {
-    jsr120_cbs_delete_all_msgs(msid, cbs_midlet_listeners);
+void jsr120_cbs_delete_midlet_suite_msg(unsigned char *msid) {
+    jsr120_cbs_delete_midlet_suite_msgs(msid, &cbs_midlet_listeners);
 }
 
 /**
@@ -385,8 +383,8 @@ void jsr120_cbs_delete_midlet_suite_msg(SuiteIdType msid) {
  *
  * @param msid The MIDlet suite identifier.
  */
-void jsr120_cbs_delete_push_msg(SuiteIdType msid) {
-    jsr120_cbs_delete_all_msgs(msid, cbs_push_listeners);
+void jsr120_cbs_delete_push_msg(unsigned char *msid) {
+    jsr120_cbs_delete_midlet_suite_msgs(msid, &cbs_push_listeners);
 }
 
 /**
@@ -398,18 +396,26 @@ void jsr120_cbs_delete_push_msg(SuiteIdType msid) {
  *     message identifier) pairings.
  *
  */
-static void jsr120_cbs_delete_all_msgs(SuiteIdType msid, ListElement* head) {
+static void jsr120_cbs_delete_midlet_suite_msgs(unsigned char* msid,
+    ListElement** head) {
 
     ListElement *elem = NULL;
 
-    if ((elem = jsr120_list_get_first_by_msID(head, msid)) != NULL) {
-        /*
+    /*
+     * Get (and dequeue) all list elements with the matching suite id.
+     */
+    while ((elem = jsr120_list_remove_first_by_msID(head, msid)) != NULL) {
+	/*
          * If the dequeued element has a valid msg id,
-         * then delete all CBS messages stored for msg id.
-         */
-        if (elem->id > 0) {
+	 * then delete all CBS messages stored for msg id.
+	 */
+	if (elem->id > 0) {
             jsr120_cbs_pool_remove_all_msgs(elem->id);
-        }
+	}
+        /*
+         * Free dequeued element.
+         */
+        jsr120_list_destroy(elem);
     }
 }
 

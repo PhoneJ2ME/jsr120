@@ -1,6 +1,5 @@
 /*
  *
- *
  * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
@@ -32,7 +31,6 @@ extern "C" {
 #endif
 
 #include <kni.h>
-#include <suitestore_common.h>
 
 /**
  * Unregister or close the given WMA entry
@@ -44,8 +42,8 @@ extern "C" {
  * @param appID application ID of MMS message
  * @param fd unique identifier for the connection
  */
-void wmaPushCloseEntry(int state, char *entry, int port,
-                       SuiteIdType msid, char *appID, int fd);
+void wmaPushCloseEntry(int state, char *entry, int port, 
+                       char *msid, char *appID, int fd);
 
 /**
  * Check if given connection is a WMA connection.
@@ -58,7 +56,7 @@ void wmaPushCloseEntry(int state, char *entry, int port,
  *
  * @result returns true if it is WMA protocol, false otherwise
  */
-jboolean isWmaProtocol(int pushPort, char *entry, char *pushStoreName,
+jboolean isWmaProtocol(int pushPort, char *entry, char *pushStoreName, 
                        int port, char *store);
 
 /**
@@ -85,7 +83,7 @@ char *getWmaPushEntry(char *entry);
  * @param appID Application ID of MMS message.
  */
 void wmaPushProcessPort(char *buffer, int *fd, int port,
-                        SuiteIdType msid, char *appID);
+                        char *msid, char *appID);
 
 #if ENABLE_JSR_205
 /**
@@ -95,7 +93,7 @@ void wmaPushProcessPort(char *buffer, int *fd, int port,
  *
  * @result returns true if it is MMS protocol, false otherwise
  */
-jboolean isMMSProtocol(char *entry);
+jboolean isMMSProtocol(char *entry); 
 
 /**
  * Get MMS app ID from push entry string

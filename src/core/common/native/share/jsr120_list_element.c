@@ -1,6 +1,5 @@
 /*
  *
- *
  * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
@@ -27,7 +26,6 @@
 #include <string.h>
 #include <jsr120_list_element.h>
 #include <pcsl_memory.h>
-#include <suitestore_common.h>
 
 #ifndef NULL
 #define NULL 0
@@ -54,19 +52,25 @@
  * @return A pointer to the element that was created.
  */
 ListElement* jsr120_list_new_by_number(ListElement** head, jint num,
-    SuiteIdType msid, void* userData, void* userDataCallback) {
+    unsigned char *msid, void* userData, void* userDataCallback) {
 
     ListElement* q      = (ListElement*) pcsl_mem_malloc(sizeof(ListElement));
     q->next             = NULL;
     q->id               = num;
-    q->msid         = msid;
+    /*
+     * Make a copy of msid if not NULL
+     */
+    if (msid) {
+        q->msid         = (unsigned char*)pcsl_mem_strdup((char *)msid);
+    } else {
+        q->msid         = NULL;
+    }
     q->strid = NULL;
     q->userData = userData;
     q->userDataCallback = userDataCallback;
     q->isRegistered = 1;
     q->isNewMessage = 1;
     jsr120_list_add_first(head, q);
-
     return q;
 }
 
@@ -82,7 +86,7 @@ ListElement* jsr120_list_new_by_number(ListElement** head, jint num,
  * @return A pointer to the element that was created.
  */
 ListElement* jsr120_list_new_by_name(ListElement** head, unsigned char* name,
-    SuiteIdType msid, void* userData, void* userDataCallback) {
+    unsigned char* msid, void* userData, void* userDataCallback) {
 
     ListElement* q = (ListElement*) pcsl_mem_malloc(sizeof(ListElement));
     q->next = NULL;
@@ -93,7 +97,12 @@ ListElement* jsr120_list_new_by_name(ListElement** head, unsigned char* name,
     } else {
         q->strid = NULL;
     }
-    q->msid = msid;
+    /* Duplicate the MIDlet suite ID. */
+    if (msid != NULL) {
+        q->msid = (unsigned char*)pcsl_mem_strdup((char*)msid);
+    } else {
+        q->msid = NULL;
+    }
     q->userData = userData;
     q->userDataCallback = userDataCallback;
     q->isRegistered = 1;
@@ -227,7 +236,7 @@ ListElement* jsr120_list_remove_first_by_name(ListElement** head, unsigned char*
     }
 
     for (next = *head; next != NULL; head = &(next->next), next=next->next) {
-        if (name && next && next->strid && (strcmp((char*)next->strid, (char*)name) == 0)) {
+        if (name && next && next->strid && (strcmp(next->strid, name) == 0)) {
             *head = next->next;
             next->next = NULL;
             return next;
@@ -247,7 +256,7 @@ ListElement* jsr120_list_remove_first_by_name(ListElement** head, unsigned char*
  *
  * @return A pointer to the element that was removed.
  */
-ListElement* jsr120_list_remove_first_by_msID(ListElement** head, SuiteIdType msid) {
+ListElement* jsr120_list_remove_first_by_msID(ListElement** head, unsigned char* msid) {
     ListElement* next;
 
     if (head == NULL) {
@@ -255,34 +264,12 @@ ListElement* jsr120_list_remove_first_by_msID(ListElement** head, SuiteIdType ms
     }
 
     for (next = *head; next != NULL; head = &(next->next), next=next->next) {
-	if ((msid != UNUSED_SUITE_ID) && next && next->msid &&
-                (next->msid == msid)) {
+	if (msid && next && next->msid && (strcmp(next->msid, msid) == 0)) {
             *head = next->next;
             next->next = NULL;
             return next;
 	}
     }
-    return NULL;
-}
-
-/**
- * Retrieve the element matching the given MIDlet suite identifier
- *
- * @param head A pointer to the first element in the list.
- * @param msid The MIDlet suite identifier to be matched.
- *
- * @return  A pointer to the element that matched the MIDlet suite 
- *  identifier, or <code>NULL</code> if no element could be found.
- */
-ListElement* jsr120_list_get_first_by_msID(ListElement* head, SuiteIdType msid) {
-
-    for ( ; head != NULL ; head = head->next) {
-        if (head->msid == msid && head->isRegistered) {
-            return head;
-        }
-    }
-
-    /* No match. */
     return NULL;
 }
 
@@ -308,7 +295,7 @@ ListElement* jsr120_list_get_by_number(ListElement* head, jint num) {
  *
  * @return  A pointer to the element that matched the number, or
  *	<code>NULL</code> if no element could be found.
- * The message is flagged as no longer new after it is
+ * The message is flagged as no longer new after it is 
  * reported the first time.
  */
 ListElement* jsr120_list_get_by_number1(ListElement* head, jint num, jint isNew) {
@@ -355,7 +342,7 @@ ListElement* jsr120_list_get_by_name1(ListElement* head, unsigned char* name,
     }
 
     for ( ; head != NULL; head = head->next) {
-        if ((strcmp((char*)head->strid, (char*)name) == 0) && head->isRegistered &&
+        if ((strcmp(head->strid, name) == 0) && head->isRegistered &&
             (!isNew || head->isNewMessage)) {
             head->isNewMessage = 0; /* Message is not new */
             return head;
@@ -385,6 +372,9 @@ void jsr120_list_destroy(ListElement* head) {
 
     /* Release any string ID memory. */
     pcsl_mem_free(head->strid);
+
+    /* Release any Midlet Suite ID string memory. */
+    pcsl_mem_free(head->msid);
 
     /* Release the memory required by the list element. */
     pcsl_mem_free(head);
@@ -455,7 +445,7 @@ void jsr120_list_unregister_by_name(ListElement** head, unsigned char* name,
 
     for (next = *head; next != NULL; head = &(next->next), next=next->next) {
 
-        if (next && next->strid && (strcmp((char*)next->strid, (char*)name) == 0) &&
+        if (next && next->strid && (strcmp(next->strid, name) == 0) &&
             (next->userDataCallback == userDataCallback)) {
 
             /* There is a match, so clear the flag. */

@@ -1,6 +1,5 @@
 /*
  *
- *
  * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
@@ -26,25 +25,34 @@
 
 package com.sun.midp.io.j2me.cbs;
 
-import com.sun.midp.io.j2me.ProtocolBase;
+// Interfaces
+import com.sun.cldc.io.ConnectionBaseInterface;
+import com.sun.midp.security.ImplicitlyTrustedClass;
+import javax.microedition.io.StreamConnection;
+import javax.wireless.messaging.MessageConnection;
 
+// Classes
+import com.sun.midp.io.j2me.sms.MessageObject;
 import com.sun.midp.io.j2me.sms.TextEncoder;
-
+import com.sun.midp.main.Configuration;
+import com.sun.midp.midlet.MIDletSuite;
+import com.sun.midp.midlet.Scheduler;
 import com.sun.midp.security.Permissions;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
+import com.sun.midp.security.SecurityToken;
+import com.sun.midp.log.Logging;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.Vector;
-import javax.microedition.io.Connector;
 import javax.microedition.io.Connection;
+import javax.microedition.io.Connector;
 import javax.wireless.messaging.Message;
-import javax.wireless.messaging.MessageConnection;
+import javax.wireless.messaging.MessageListener;
 
 // Exceptions
 import java.io.IOException;
 import java.io.InterruptedIOException;
-
 
 /**
  * CBS message connection implementation.
@@ -52,17 +60,51 @@ import java.io.InterruptedIOException;
  * Cell Broadcast message connections are receive only.
  *
  */
-public class Protocol extends ProtocolBase {
+public class Protocol implements MessageConnection,
+                                 ImplicitlyTrustedClass,
+                                 ConnectionBaseInterface,
+                                 StreamConnection {
+
+    /** Prefix for the URL used by CBS connections. */    
+    private final String CBS_URL_PREFIX = "cbs://";
+
+    /**
+     * Indicates whether the connection is open or closed. If it is closed,
+     * subsequent operations should throw an exception.
+     */
+    private MIDletSuite midletSuite;
+
+    /**
+     * Indicates whether the connection is open or closed. If it is closed,
+     * subsequent operations should throw an exception.
+     */
+    protected boolean open = false;
 
     /** Currently opened connections. */
     static protected Vector openConnections = new Vector();
 
+    /** Connector mode: READ, WRITE or READ_WRITE. */
+    protected int m_mode = 0;    
+
     /** Local handle for port number. */
     private int m_imsgid = 0;
 
+    /** Local handle representing this (open) CBS connection */
+    private int cbsHandle = 0;
+
+    /** This class has a different security domain than the MIDlet suite */
+    private static SecurityToken classSecurityToken;
+
+    /** Message listener for async notifications. */
+    MessageListener m_listener = null;
+
+    /** Listener thread. */
+    Thread m_listenerThread = null;
+
+
     /** Name of current connection. */
     protected String url;
-
+    
     /**  DCS: GSM Alphabet  */
     protected static final int GSM_TEXT = 0;
 
@@ -72,35 +114,24 @@ public class Protocol extends ProtocolBase {
     /**  DCS: Unicode UCS-2 */
     protected static final int GSM_UCS2 = 2;
 
-    /** Creates a message connection protocol handler. */
-    public Protocol() {
-        super();
-        ADDRESS_PREFIX = "cbs://";
-    }
+    /**
+     * Indicates whether a trusted application is allowed to open the
+     * message connection. Set to true if the permission check passes.
+     * Note: return true to override Security Permissions
+     */
+    private boolean openPermission = false;
 
     /**
-     * Gets the connection parameter in string mode.
-     * @return string that contains a parameter 
+     * Indicates whether a trusted application is allowed to read from the
+     * message connection. Set to true if the permission check passes.
+     * Note: return true to override Security Permissions
      */
-    protected String getAppID() {
-        if (m_imsgid > 0) {
-            return new String(Integer.toString(m_imsgid));
-        } else {
-            return null;
-        }
-    }
+    protected boolean readPermission = false;
 
     /**
-     * Sets the connection parameter in string mode.
-     * @param newValue new value of connection parameter 
+     * Flag to indicate successful retrieval of message.
      */
-    protected void setAppID(String newValue) {
-        try {
-            m_imsgid = Integer.parseInt(newValue);
-        } catch (NumberFormatException exc) {
-            m_imsgid = 0;
-        }
-    }
+    private boolean doneRetrieving = false;
 
     /**
      * The internal representation of the CBS data structure. This is also
@@ -125,27 +156,15 @@ public class Protocol extends ProtocolBase {
      * Native function to open a CBS connection.
      *
      * @param msgID    The message ID to be matched against incoming messages.
-     * @param msid     Midlet Suite ID.
+     * @param msid     Midlet Suite ID string.
      *
      * @return    returns handle to the open CBS connection.
      */
-    private native int open0(int msgID, int msid) throws IOException;
+    private native int open0(int msgID, String msid) throws IOException;
 
-    /**
-     * Unblock the receive thread.
-     *
-     * @param msid The MIDlet suite ID.
-     *
-     * @return  returns handle to the connection.
-     */
-    protected int unblock00(int msid)
-        throws IOException {
-        return open0(0, msid);
-    }
-
-    /**
+    /** 
      * Native function to close cbs connection
-     *
+     * 
      * @param port    The port number to close.
      * @param handle  The CBS handle returned by open0.
      * @param deRegister Deregistration appID when parameter is 1.
@@ -155,21 +174,10 @@ public class Protocol extends ProtocolBase {
     private native int close0(int port, int handle, int deRegister);
 
     /**
-     * Close connection.
-     *
-     * @param connHandle handle returned by open0
-     * @param deRegister Deregistration appID when parameter is 1.
-     * @return    0 on success, -1 on failure
-     */
-    protected int close00(int connHandle, int deRegister) {
-        return close0(m_imsgid, connHandle, deRegister);
-    }
-
-    /**
      * Receives a CBS message.
      *
      * @param port    The port used for incoming messages.
-     * @param msid     Midlet Suite ID.
+     * @param msid     Midlet Suite ID string.
      * @param handle    The handle used to open the CBS connection.
      * @param cbsPacket    The received packet.
      *
@@ -177,7 +185,7 @@ public class Protocol extends ProtocolBase {
      *
      * @exception IOException  if an I/O error occurs
      */
-    static private synchronized native int receive0(int port, int msid,
+    static private synchronized native int receive0(int port, String msid,
                                                     int handle,
                                    CBSPacket cbsPacket) throws IOException;
 
@@ -194,22 +202,21 @@ public class Protocol extends ProtocolBase {
     private native int waitUntilMessageAvailable0(int port, int handle)
                                throws IOException;
 
-    /**
-     * Waits until message available
-     *
-     * @param handle handle to connection
-     * @return 0 on success, -1 on failure
-     * @exception IOException  if an I/O error occurs
-     */
-    protected int waitUntilMessageAvailable00(int handle) 
-        throws IOException {
-        return waitUntilMessageAvailable0(m_imsgid, handle);
-    }
-
 
     /*
      * Helper methods
      */
+
+    /**
+     * Ensures that the connection is open.
+     *
+     * @exception InterruptedIOException If the connection is closed.
+     */
+    public void ensureOpen() throws InterruptedIOException {
+        if (!open) {
+            throw new InterruptedIOException("Connection already closed.");
+        }
+    }
 
     /**
      * Checks the internal setting of the receive permission. Called from
@@ -217,7 +224,7 @@ public class Protocol extends ProtocolBase {
      *
      * @exception InterruptedIOException if permission dialog was pre-empted.
      */
-    protected void checkReceivePermission() throws InterruptedIOException {
+    private void checkReceivePermission() throws InterruptedIOException {
 
         /* Check if we have permission to receive. */
         if (readPermission == false) {
@@ -232,7 +239,90 @@ public class Protocol extends ProtocolBase {
         }
     }
 
-    /*
+    /**
+     * Start the receiver thread, which simply waits until a message becomes
+     * available, then notifies all listeners.
+     *
+     * When a listener is established, the receiver thread starts and initially
+     * remains idle. When a message arrives, any available listeners get
+     * notified so they can process the incoming message.
+     */
+    private void startReceiverThread() {
+	final MessageConnection messageConnection = this;
+
+	if (m_listenerThread == null) {
+
+	    m_listenerThread = new Thread() {
+
+		/**
+		 * Run the steps that wait for a new message.
+		 */
+		public void run() {
+
+		    int messageLength = 0;
+		    do {
+
+			/* No message, initially. */
+			messageLength = -1;
+			try {
+                            messageLength =
+                                waitUntilMessageAvailable0(m_imsgid,
+                                                           cbsHandle);
+                            if (m_imsgid == 0) {
+                                break;
+                            }
+
+                            /*
+                             * If a message is available and there are
+                             * listeners, notify all listeners of the
+                             * incoming message.
+                             */
+                            if (messageLength >= 0) {
+                                if (m_listener != null) {
+
+                                    // Invoke registered listener.
+                                    m_listener.notifyIncomingMessage(
+                                        messageConnection);
+
+
+                                }
+                            }
+
+			} catch (InterruptedIOException iioe) {
+                            /*
+                             * Terminate, the reader thread has been
+                             * interrupted
+                             */
+                            break;
+                        } catch (IOException exception) {
+                            break;
+                        } catch (IllegalArgumentException iae) {
+			    /*
+			    * This happens if msgID has been set to 0;
+			    * which indicates that the connection has been
+			    * closed. So Terminate.
+			    */
+                            break;
+                        }
+
+                    /* m_imsgid = 0 on close */
+                    } while (m_imsgid > 0);
+		}
+            };
+
+            m_listenerThread.start();
+	}
+    }
+
+    /**
+     * Construct a CBS message connection protocol handler.
+     */
+    public Protocol() {
+	midletSuite = Scheduler.getScheduler().getMIDletSuite();
+    }
+
+
+    /* 
      * MessageConnection Interface
      */
 
@@ -248,10 +338,6 @@ public class Protocol extends ProtocolBase {
      * object is requested from the connection. For example:
      * <p>
      * <code>Message msg = conn.newMessage(TEXT_MESSAGE);</code>
-     * <p>
-     * The newly created <code>Message</code> does not have the destination
-     * address set. It must be set by the application before the message is
-     * sent.
      * <p>
      * If this method is called in receiving mode, the
      * <code>Message</code> object does have
@@ -274,7 +360,7 @@ public class Protocol extends ProtocolBase {
     public Message newMessage(String type) {
 
         /* Create the CBS-formatted URL. */
-        String address = ADDRESS_PREFIX;
+        String address = CBS_URL_PREFIX;
         if (m_imsgid != 0) {
             address = address + ":" + String.valueOf(m_imsgid);
         }
@@ -343,11 +429,8 @@ public class Protocol extends ProtocolBase {
      * @return a <code>Message</code> object
      * @exception java.io.IOException if an error occurs while receiving
      *         a message.
-     * @exception java.io.InterruptedIOException if this
-     *         <code>MessageConnection</code> object is closed during this
-     *         receive call.
-     * @exception java.lang.SecurityException if the application does not have
-     *         permission to receive messages using the given port number.
+     * @exception java.io.InterruptedIOException
+     * @exception java.lang.SecurityException
      */
     public synchronized Message receive() throws IOException {
 
@@ -375,7 +458,7 @@ public class Protocol extends ProtocolBase {
              */
                 // Pick up the CBS message from the message pool.
             length = receive0(m_imsgid, midletSuite.getID(),
-                              connHandle, cbsPacket);
+                              cbsHandle, cbsPacket);
 
             if (length < 0) {
                 throw new InterruptedIOException("Connection closed.");
@@ -391,7 +474,7 @@ public class Protocol extends ProtocolBase {
 
             /* Construct a message with proper encoding type and address. */
             msg = newMessage(type,
-                new String(ADDRESS_PREFIX + ":" + cbsPacket.msgID));
+                new String(CBS_URL_PREFIX + ":" + cbsPacket.msgID));
 
             /* Set message payload as text or binary. Message can be null. */
             if (isTextMessage) {
@@ -429,28 +512,49 @@ public class Protocol extends ProtocolBase {
         return msg;
     }
 
+    // JAVADOC COMMENT ELIDED
+    public void setMessageListener(MessageListener listener)
+                    throws IOException {
 
-    /**
-     * Returns the number of segments required to send the given
-     * <code>Message</code>.
-     *
-     * <p>Note: The message is not actually sent. The number of protocol
-     * segments is simply computed.
-     * </p>
-     * <p>This method will compute the number of segments needed when this
-     * message is split into the protocol segments using the appropriate
-     * features of the underlying protocol. This method does not take into
-     * account possible limitations of the implementation that may limit the
-     * number of segments that can be sent using this feature. These limitations
-     * are protocol specific and are documented with the adapter definition for
-     * that protocol.
-     * </p>
-     * @param message The message to be used for the computation.
-     *
-     * @return The number of protocol segments needed for sending the message.
-     *     Returns <code>0</code> if the <code>Message</code> object cannot be
-     *     sent using the underlying protocol.
-     */
+        // Check for permission to receive.
+        checkReceivePermission();
+
+        // Make sure the connection is still open.
+        ensureOpen();
+
+        // If a listener is active, kill (unregister) it.
+        if (m_listener != null && listener == null) {
+            // Unregister the current listener.
+            m_listenerThread = null;
+            if (m_listenerThread != null) {
+                if (m_listenerThread.isAlive()) {
+                    int save_m_imsgid = 0;
+                    if (m_imsgid != 0) {
+                        save_m_imsgid = m_imsgid;
+                    }
+                    m_imsgid = 0;
+
+                    /* Close thread without deregistering */
+                    close0(save_m_imsgid, cbsHandle, 0);
+                    try {
+                        m_listenerThread.join();
+                    } catch (InterruptedException ie) {
+                    }  /* Ignore interrupted exception */
+                    m_imsgid = save_m_imsgid;
+                    /* Unblock the low level */
+                    open0(0, null);
+                }
+            }
+        }
+
+        // Establish the new listener and start the receive process.
+        m_listener = listener;
+        if (listener != null && m_listenerThread == null) {
+            startReceiverThread();
+        }
+    }
+
+    // JAVADOC COMMENT ELIDED
     public int numberOfSegments(Message message) {
 
         /* When a message is present, there is always just one segment. */
@@ -475,9 +579,20 @@ public class Protocol extends ProtocolBase {
         m_imsgid = 0;
 
         /* Close the connection and unregister the application ID. */
-        close0(save_imsgid, connHandle, 1);
+        close0(save_imsgid, cbsHandle, 1);
 
-        setMessageListener(null);
+        if ((m_listener != null)) {
+            m_listener = null;
+        }
+
+        if (m_listenerThread != null) {
+            if (m_listenerThread.isAlive()) {
+                try {
+                    m_listenerThread.join();
+                } catch (InterruptedException ie) {
+                } /* Ignore interrupted exception */
+            }
+        }
 
         /*
          * Reset handle and other params to default
@@ -485,7 +600,7 @@ public class Protocol extends ProtocolBase {
          * by the spec and the resetting would prevent any
          * strange behaviour.
          */
-        connHandle = 0;
+        cbsHandle = 0;
         open = false;
         m_mode = 0;
 
@@ -501,8 +616,26 @@ public class Protocol extends ProtocolBase {
     }
 
     /*
-     * ConnectionBaseInterface Interface
+     * ImplicitlyTrustedClass Interface
      */
+
+    /**
+     * Initializes the security token for this class, so it can perform actions
+     * that a normal MIDlet suite cannot.
+     *
+     * @param token    The security token for this class.
+     */
+    public void initSecurityToken(SecurityToken token) {
+
+        if (classSecurityToken == null) {
+            classSecurityToken = token;
+        }
+    }
+
+
+    /*
+     * ConnectionBaseInterface Interface
+     */ 
 
     /**
      * Opens a CBS connection. This method is called from the
@@ -532,7 +665,7 @@ public class Protocol extends ProtocolBase {
      *  </ul>
      * Currently, the <code>mode</code> and <code>timeouts</code> parameters are
      * ignored.
-     *
+     * 
      * @param name the target of the connection
      * @param mode indicates whether the caller
      *             intends to write to the connection. Currently,
@@ -544,19 +677,19 @@ public class Protocol extends ProtocolBase {
      * @exception IOException if the connection is closed or unavailable
      */
     public Connection openPrim(String name, int mode, boolean timeouts)
-        throws IOException {
+        throws IOException { 
 
         return openPrimInternal(name, mode, timeouts);
     }
 
 
-    /*
+    /* 
      * StreamConnection Interface
-     */
+     */ 
 
     /**
      * Open and return an input stream for a connection.
-     * This method always throw
+     * This method always throw  
      * <code>IllegalArgumentException</code>.
      *
      * @return                              An input stream.
@@ -628,8 +761,8 @@ public class Protocol extends ProtocolBase {
      * @return the successfully opened connection.
      * @exception IOException if the connection is closed or unavailable.
      */
-    public synchronized Connection openPrimInternal(String name,
-                                                    int mode,
+    public synchronized Connection openPrimInternal(String name, 
+                                                    int mode, 
                                                     boolean timeouts)
                                        throws IOException {
 
@@ -702,7 +835,7 @@ public class Protocol extends ProtocolBase {
         }
 
         try {
-            connHandle = open0(m_imsgid, midletSuite.getID());
+            cbsHandle = open0(m_imsgid, midletSuite.getID());
         } catch (IOException ioexcep) {
             m_mode = 0;
             throw new IOException("Unable to open CBS connection.");

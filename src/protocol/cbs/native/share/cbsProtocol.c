@@ -1,6 +1,5 @@
 /*
  *
- *
  * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
@@ -47,7 +46,6 @@
 #include <midp_logging.h>
 #include <midpResourceLimit.h>
 #include <pcsl_memory.h>
-#include <suitestore_common.h>
 
 #include <ROMStructs.h>
 
@@ -78,19 +76,22 @@ static int isClosed = 0;
  * @return A handle to the open CBS connection.
  */
 KNIEXPORT KNI_RETURNTYPE_INT
-Java_com_sun_midp_io_j2me_cbs_Protocol_open0(void) {
+Java_com_sun_midp_io_j2me_cbs_Protocol_open0(void) { 
 
     /* The ID to be matched against incoming messages. */
     int msgID;
 
+    /** The MIDP String version of the Midlet suite ID. */
+    MidpString msMsid = NULL_MIDP_STRING;
+
     /* The midlet suite name for this connection. */
-    SuiteIdType msid = UNUSED_SUITE_ID;
+    unsigned char* msid = NULL;
 
     /* The handle associated with this CBS connection. */
     jint handle = 0;
 
     /* The status from registering a listener with the message ID. */
-    WMA_STATUS status = WMA_ERR;
+    JSR120_STATUS status = JSR120_ERR;
 
     /* Set closed flag to false */
     isClosed = 0;
@@ -100,12 +101,35 @@ Java_com_sun_midp_io_j2me_cbs_Protocol_open0(void) {
 
     /* When msgID is 0 then return else continue */
     if (msgID) {
-        /* Pick up the Midlet Suite ID */
-        msid = KNI_GetParameterAsInt(2);
+        /* Create handles for all Java objects. */
+        KNI_StartHandles(1);
+        KNI_DeclareHandle(javaStringMsid);
+
+        /* Pick up the Midlet Suite ID string. */
+        KNI_GetParameterAsObject(2, javaStringMsid);
 
         do {
+
+            /* Get the Midlet suite name. */
+            if (!KNI_IsNullHandle(javaStringMsid)) {
+
+            msMsid.len = KNI_GetStringLength(javaStringMsid);
+            msMsid.data = (jchar*)pcsl_mem_malloc(msMsid.len * sizeof(jchar));
+            if (msMsid.data == NULL) {
+                /* Couldn't allocate space for the Midlet suite name string. */
+                KNI_ThrowNew(midpOutOfMemoryError, NULL);
+                break;
+            } else {
+
+                    /* Convert the MIDP string contents to a character array. */
+                    KNI_GetStringRegion(javaStringMsid, 0, msMsid.len, msMsid.data);
+                    msid = (unsigned char*)midpJcharsToChars(msMsid);
+                    pcsl_mem_free(msMsid.data);
+                }
+            }
+
             /* Register the message ID with the message pool. */
-            if (jsr120_cbs_is_midlet_msgID_registered((jchar)msgID) == WMA_ERR) {
+            if (jsr120_cbs_is_midlet_msgID_registered((jchar)msgID) == JSR120_ERR) {
 
                 /* Fetch a unique handle that identifies this CBS communication session. */
                 handle = (int)(pcsl_mem_malloc(1));
@@ -117,18 +141,23 @@ Java_com_sun_midp_io_j2me_cbs_Protocol_open0(void) {
 
                 status = jsr120_cbs_register_midlet_msgID((jchar)msgID, msid,
                                                           handle);
-                if (status == WMA_ERR) {
+                if (status == JSR120_ERR) {
                     KNI_ThrowNew(midpIOException, "Port already in use.");
                     break;
                 }
 
             } else {
+
                 KNI_ThrowNew(midpIOException, "Port already in use.");
                 break;
             }
         } while (0);
-    }
 
+        /* Memory clean-up (The string can be NULL). */
+        pcsl_mem_free(msid);
+
+        KNI_EndHandles();
+    }
     KNI_ReturnInt(handle);
 }
 
@@ -166,8 +195,14 @@ Java_com_sun_midp_io_j2me_cbs_Protocol_close0(void) {
             /* Unregister the CBS port from the CBS pool. */
             jsr120_cbs_unregister_midlet_msgID((jchar)msgID);
 
-            /* Release the handle associated with this connection. */
-            pcsl_mem_free((void *)handle);
+            /* If the handle hasn't been created, the connection isn't open. */
+            if (handle == 0) {
+                status = -1;
+            } else {
+
+                /* Release the handle associated with this connection. */
+                pcsl_mem_free((void *)handle);
+            }
         }
 
     }
@@ -186,7 +221,7 @@ Java_com_sun_midp_io_j2me_cbs_Protocol_close0(void) {
  *         could not be received.
  */
 KNIEXPORT KNI_RETURNTYPE_INT
-Java_com_sun_midp_io_j2me_cbs_Protocol_receive0(void) {
+Java_com_sun_midp_io_j2me_cbs_Protocol_receive0(void) { 
     MidpReentryData* info = (MidpReentryData*)SNI_GetReentryData(NULL);
 
     /* The CBS message identifier */
@@ -199,13 +234,19 @@ Java_com_sun_midp_io_j2me_cbs_Protocol_receive0(void) {
     CbsMessage* pCbsData = NULL;
 
     /* Assume a message could not be received. */
-    int messageLength = -1;
+    int messageLength = -1; 
+
+    /** The MIDP String version of the Midlet suite ID. */
+    MidpString msMsid = NULL_MIDP_STRING;
 
     /* The midlet suite name for this connection. */
-    SuiteIdType msid = UNUSED_SUITE_ID;
+    unsigned char* msid = NULL;
 
     if (!isClosed) { /* No close in progress */
-        KNI_StartHandles(3);
+        KNI_StartHandles(4);
+
+        /* Handle to Midlet Suite name string */
+        KNI_DeclareHandle(javaStringMsid);
 
         /* This is the handle to the serialized CBSPacket class fields. */
         KNI_DeclareHandle(messageClazz);
@@ -215,12 +256,31 @@ Java_com_sun_midp_io_j2me_cbs_Protocol_receive0(void) {
         KNI_DeclareHandle(byteArray);
 
         msgID = KNI_GetParameterAsInt(1);
-        msid = KNI_GetParameterAsInt(2);
-
+        /* Pick up the Midlet Suite ID string. */
+        KNI_GetParameterAsObject(2, javaStringMsid);
         handle = KNI_GetParameterAsInt(3);
         KNI_GetParameterAsObject(4, messageObject);
 
         do {
+
+            /* Pick up the Midlet suite name. */
+            if (!KNI_IsNullHandle(javaStringMsid)) {
+
+                msMsid.len = KNI_GetStringLength(javaStringMsid);
+                msMsid.data = (jchar*)pcsl_mem_malloc(msMsid.len * sizeof(jchar));
+                if (msMsid.data == NULL) {
+                    /* Couldn't allocate space for the Midlet suite name string. */
+                    KNI_ThrowNew(midpOutOfMemoryError, NULL);
+                    break;
+                } else {
+
+                    /* Convert the MIDP string contents to a character array. */
+                    KNI_GetStringRegion(javaStringMsid, 0, msMsid.len, msMsid.data);
+                    msid = (unsigned char*)midpJcharsToChars(msMsid);
+                    pcsl_mem_free(msMsid.data);
+                }
+            }
+
             /* If this is the first time, peek into the pool for a message. */
             if (info == NULL) {
                 pCbsData = jsr120_cbs_pool_peek_next_msg((jchar)msgID);
@@ -231,6 +291,13 @@ Java_com_sun_midp_io_j2me_cbs_Protocol_receive0(void) {
                  * appear in the pool.
                  */
                 if (pCbsData == NULL) {
+                    if (jsr120_cbs_is_midlet_msgID_registered((jchar)msgID) == JSR120_ERR) {
+                        if (jsr120_cbs_register_midlet_msgID((jchar)msgID, msid,
+                                                   handle) == JSR120_ERR) {
+                            KNI_ThrowNew(midpIOException, "Registering CBS receive");
+                            break;
+                        }
+                    }
 
                     /* Wait for a message to arrive in the pool. */
                     wma_setBlockedCBSHandle(handle, WMA_CBS_READ_SIGNAL);
@@ -270,7 +337,7 @@ Java_com_sun_midp_io_j2me_cbs_Protocol_receive0(void) {
                      */
                     KNI_GetObjectClass(messageObject, messageClazz);
                     if(KNI_IsNullHandle(messageClazz)) {
-                        KNI_ThrowNew(midpOutOfMemoryError, NULL);
+                        KNI_ThrowNew(midpOutOfMemoryError, NULL);            
                         break;
                     } else {
 
@@ -292,7 +359,7 @@ Java_com_sun_midp_io_j2me_cbs_Protocol_receive0(void) {
                             (message_field_id == 0)) {
 
                             /* REPORT_ERROR(LC_WMA, "ERROR can't get class field ID");*/
-                            KNI_ThrowNew(midpRuntimeException, NULL);
+                            KNI_ThrowNew(midpRuntimeException, NULL);            
                             break;
 
                         } else {
@@ -313,7 +380,7 @@ Java_com_sun_midp_io_j2me_cbs_Protocol_receive0(void) {
                                 /* Make a copy of all message bytes. */
                                 SNI_NewArray(SNI_BYTE_ARRAY, messageLength, byteArray);
                                 if (KNI_IsNullHandle(byteArray)) {
-                                    KNI_ThrowNew(midpOutOfMemoryError, NULL);
+                                    KNI_ThrowNew(midpOutOfMemoryError, NULL);            
                                     break;
                                 } else {
                                     for (i = 0; i < messageLength; i++) {
@@ -336,6 +403,8 @@ Java_com_sun_midp_io_j2me_cbs_Protocol_receive0(void) {
         /* Delete the message data. */
         jsr120_cbs_delete_msg(pCbsData);
 
+        pcsl_mem_free(msid);
+
         KNI_EndHandles();
     }
 
@@ -352,7 +421,7 @@ Java_com_sun_midp_io_j2me_cbs_Protocol_receive0(void) {
  * @return The length of the incoming CBS message, or <code>-1</code> if no
  *     message is available.
  */
-KNIEXPORT KNI_RETURNTYPE_INT
+KNIEXPORT KNI_RETURNTYPE_INT 
 Java_com_sun_midp_io_j2me_cbs_Protocol_waitUntilMessageAvailable0(void) {
     MidpReentryData *info = (MidpReentryData*)SNI_GetReentryData(NULL);
     int msgID;
@@ -376,7 +445,7 @@ Java_com_sun_midp_io_j2me_cbs_Protocol_waitUntilMessageAvailable0(void) {
              */
             KNI_ThrowNew(midpIllegalArgumentException, "No message ID available.");
         } else {
-
+            
             /* See if there is a new message in the pool. */
             pCbsData = jsr120_cbs_pool_peek_next_msg1(msgID, 1);
             if (pCbsData != NULL) {

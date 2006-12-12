@@ -1,5 +1,4 @@
 /*
- *   
  *
  * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
@@ -48,13 +47,7 @@ public class TextObject extends MessageObject
 	super(MessageConnection.TEXT_MESSAGE, addr);
     }
 
-    /**
-     * Returns the message payload data as a <code>String</code>.
-     *
-     * @return the payload of this message, or <code>null</code>
-     * if the payload for the message is not set
-     * @see #setPayloadText
-     */
+    // JAVADOC COMMENT ELIDED
     public String getPayloadText() {
 	if (buffer == null) {
 	    return null;
@@ -62,12 +55,7 @@ public class TextObject extends MessageObject
 	return TextEncoder.toString(buffer);
     }
 
-    /**
-     * Sets the payload data of this message. The payload data
-     * may be <code>null</code>.
-     * @param data payload data as a <code>String</code>
-     * @see #getPayloadText
-     */
+    // JAVADOC COMMENT ELIDED
     public void setPayloadText(String data) {
 	if (data != null) {
 	    buffer = TextEncoder.toByteArray(data);

@@ -1,5 +1,4 @@
 /*
- *   
  *
  * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
@@ -29,7 +28,6 @@
 #include <kni.h>
 #include <midpServices.h>
 #include <jsr120_types.h>
-#include <wmaInterface.h>
 
 /**
  * Sends a Text or Binary message. The calling function does not have to worry about the
@@ -56,10 +54,10 @@
  * @param destPort the receiver's port number
  * @param bytesSent The number of bytes sent is returned in this variable.
  *
- * @return Returns <code>WMA_OK</code> when successful;
- *     <code>WMA_ERR</code> on error.
+ * @return Returns <code>JSR120_OK</code> when successful;
+ *     <code>JSR120_ERR</code> on error.
  */
-WMA_STATUS jsr120_send_sms(jchar msgType,
+JSR120_STATUS jsr120_send_sms(jchar msgType,
                               unsigned char address[],
                               unsigned char msgBuffer[],
                               jchar msgLen,
@@ -78,7 +76,7 @@ WMA_STATUS jsr120_send_sms(jchar msgType,
     (void)bytesSent;
     (void)pContext;
 
-    return WMA_ERR;
+    return JSR120_ERR;
 }
 
 /*
@@ -92,12 +90,12 @@ WMA_STATUS jsr120_send_sms(jchar msgType,
  *
  * @param port The port number to be removed.
  *
- * @return Returns <code>WMA_OK</code> when successful;
- *     <code>WMA_ERR</code> on error.
+ * @return Returns <code>JSR120_OK</code> when successful;
+ *     <code>JSR120_ERR</code> on error.
  */
-WMA_STATUS jsr120_remove_sms_listening_port(jchar port) {
+JSR120_STATUS jsr120_remove_sms_listening_port(jchar port) {
     (void)port;
-    return WMA_ERR;
+    return JSR120_ERR;
 }
 
 /**
@@ -110,12 +108,12 @@ WMA_STATUS jsr120_remove_sms_listening_port(jchar port) {
  *
  * @param port The registered port number.
  *
- * @return Returns <code>WMA_OK</code> when successful;
- *     <code>WMA_ERR</code> on error.
+ * @return Returns <code>JSR120_OK</code> when successful;
+ *     <code>JSR120_ERR</code> on error.
  */
-WMA_STATUS jsr120_add_sms_listening_port(jchar port) {
+JSR120_STATUS jsr120_add_sms_listening_port(jchar port) {
     (void)port;
-    return WMA_ERR;
+    return JSR120_ERR;
 }
 
 /**
@@ -164,9 +162,7 @@ void jsr120_notify_sms_send_completed(jint *bytesSent) {
 /**:
  * Returns the number of segments that would be needed in the underlying
  * protocol to send a specified message. The specified message is included as a
- * parameter of this function. Note that this method does not actually send the
- * message. It will only calculate the number of protocol segments needed for
- * sending the message.
+ * parameter of this function. 
  *
  * @param msgBuffer The message body.
  * @param msgLen Message body length (in bytes).
@@ -175,10 +171,10 @@ void jsr120_notify_sms_send_completed(jint *bytesSent) {
  * @param numSegments The number of message segments that would be required to send the
  *			message is returned here.
  *
- * @return Returns <code>WMA_OK</code> when successful;
- *     <code>WMA_ERR</code> on error.
+ * @return Returns <code>JSR120_OK</code> when successful;
+ *     <code>JSR120_ERR</code> on error.
  */
-WMA_STATUS jsr120_number_of_sms_segments(unsigned char msgBuffer[], jint msgLen, jint msgType,
+JSR120_STATUS jsr120_number_of_sms_segments(unsigned char msgBuffer[], jint msgLen, jint msgType,
                                             jboolean hasPort, /*out*/jint *numSegments) {
 
     /**
@@ -238,7 +234,7 @@ WMA_STATUS jsr120_number_of_sms_segments(unsigned char msgBuffer[], jint msgLen,
         *numSegments = (msgLen + fragmentSize - 1) / fragmentSize;
     }
 
-    return WMA_OK;
+    return JSR120_OK;
 }
 
 /**
@@ -268,8 +264,8 @@ jboolean jsr120_check_signal(midpSignalType signalType, int fd) {
 /**
  * Initialize datagram support for the given protocol.
  */
-WMA_STATUS init_jsr120() {
-    return WMA_ERR;
+JSR120_STATUS init_jsr120() {
+    return JSR120_ERR;
 }
 
 /**

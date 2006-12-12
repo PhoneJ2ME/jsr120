@@ -1,5 +1,4 @@
 /*
- *   
  *
  * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
@@ -51,7 +50,6 @@
 #include <jsr205_mms_listeners.h>
 #include <jsr205_mms_protocol.h>
 #endif
-#include <wmaInterface.h>
 #include <wmaUDPEmulator.h>
 #include <bytePackUnpack.h>
 #include <wmaSocket.h>
@@ -85,7 +83,7 @@ static int checkfilter(char *filter, char *ip);
  * @param parent  ??
  * @param name  ??
  */
-WMASocket::WMASocket(WMA_PROTOCOLS protocol, int fd, QObject *parent, const char* name):
+WMASocket::WMASocket(JSR120_PROTOCOLS protocol, int fd, QObject *parent, const char* name):
     QObject(parent, name)
 {
     sockProtocol = protocol;
@@ -183,7 +181,7 @@ MmsHeader* createMmsHeader(MmsMessage* message) {
         /* Later, read header length, then data to be formatted. */
         header = (MmsHeader *)pcsl_mem_malloc(sizeof(MmsHeader));
         memset(header, 0, sizeof(MmsHeader));
-        /* Populate the header with data extracted from message fields. */
+        /* need revisit: Populate the header with data extracted from message fields. */
     }
 
     return header;
@@ -197,7 +195,7 @@ MmsHeader* createMmsHeader(MmsMessage* message) {
 void destroyMMSHeader(MmsHeader* header) {
 
     if (header != NULL) {
-        /* Use pcsl_mem_free(header->part) to free each part. */
+        /* need revisit: Use pcsl_mem_free(header->part) to free each part. */
 
         /* Free the header itself. */
         pcsl_mem_free(header);
@@ -213,12 +211,12 @@ void WMASocket::writableSlot(int socket) {
     /* Make an up-call to unblock the thread */
      switch (sockProtocol) {
 
-         case WMA_SMS_PROTOCOL:
+         case JSR120_SMS_PROTOCOL:
              jsr120_sms_message_sent_notifier();
              break;
 
 #if ENABLE_JSR_205
-         case WMA_MMS_PROTOCOL:
+         case JSR120_MMS_PROTOCOL:
              jsr205_mms_message_sent_notifier();
              break;
 #endif
@@ -231,7 +229,7 @@ void WMASocket::writableSlot(int socket) {
 
 void WMASocket::readableSlot(int socket) {
 
-    WMA_STATUS status;
+    JSR120_STATUS status;
     unsigned char ipBytes[MAX_ADDR_LENGTH];
     jint ipPort;
     jint datagramLength;
@@ -263,12 +261,12 @@ void WMASocket::readableSlot(int socket) {
         status = jsr120_datagram_read(sockProtocol, ipBytes, &ipPort, p, MAX_DATAGRAM_LENGTH,
                                       &datagramLength);  
 
-        if (status == WMA_NET_SUCCESS) {
+        if (status == JSR120_NET_SUCCESS) {
             index = 0;
 
             switch (sockProtocol) {
 
-            case WMA_SMS_PROTOCOL:
+            case JSR120_SMS_PROTOCOL:
                 sms = (SmsMessage *)pcsl_mem_malloc(sizeof(SmsMessage));
                 if (sms != NULL) {
                     memset(sms, 0, sizeof(SmsMessage));
@@ -323,7 +321,7 @@ void WMASocket::readableSlot(int socket) {
 
                 break;
 
-            case WMA_CBS_PROTOCOL:
+            case JSR120_CBS_PROTOCOL:
                 cbs = (CbsMessage*)pcsl_mem_malloc(sizeof(CbsMessage));
                 if (cbs != NULL) {
                     memset(cbs, 0, sizeof(CbsMessage));
@@ -355,12 +353,12 @@ void WMASocket::readableSlot(int socket) {
 
 #if ENABLE_JSR_205
 
-            case WMA_MMS_PROTOCOL:
+            case JSR120_MMS_PROTOCOL:
 
                 if (assemble_frags(p) == true) {
 
                     /*
-                     * Note:
+                     * Note (need revisit):
                      *
                      * The message is currently received in whole. That is, the
                      * message header and body are contained in the single
@@ -399,7 +397,7 @@ void WMASocket::readableSlot(int socket) {
                         pushsetcachedflagmms("mms://:", mms->appID); 
 
                         /* When a fetch is confirmed, add message to pool. */
-                        if (jsr205_fetch_mms() == WMA_OK) {
+                        if (jsr205_fetch_mms() == JSR120_OK) {
                             jsr205_mms_pool_add_msg(mms);
                         }
                     }
@@ -411,7 +409,7 @@ void WMASocket::readableSlot(int socket) {
 #endif
 
             default:
-                /* RFC: Silently fail for unknown protocols. */
+                /* IMPL_NOTE: Silently fail for unknown protocols. */
                 break;
 
             }  /* switch*/
@@ -429,7 +427,7 @@ void WMASocket::readableSlot(int socket) {
  * @return the platform-specific handle; 0 if there was an error
  */
 long
-wmaCreateSocketHandle(WMA_PROTOCOLS protocol, int fd) {
+wmaCreateSocketHandle(JSR120_PROTOCOLS protocol, int fd) {
     WMASocket* ws;
 
     ws = new WMASocket(protocol, fd);

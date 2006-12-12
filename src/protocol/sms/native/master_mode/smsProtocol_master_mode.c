@@ -1,5 +1,4 @@
 /*
- *   
  *
  * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
@@ -34,7 +33,7 @@
 
 #define SOCKET_ERROR (-1)
 
-extern WMA_STATUS jsr120_sms_write(jchar msgType, unsigned char *address,
+extern JSR120_STATUS jsr120_sms_write(jchar msgType, unsigned char *address,
      		                      unsigned char *msgBuffer,
 			              jchar msgLen,
 			              jchar sourcePort, jchar destPort,
@@ -66,10 +65,10 @@ extern WMA_STATUS jsr120_sms_write(jchar msgType, unsigned char *address,
  * @param bytesSent The number of bytes sent is returned in this variable
  * @param pContext pointer where to save context of asynchronous operation.
  *
- * @return Returns enum WMA_STATUS, WMA_OK on success, WMA_NET_WOULDBLOCK if
- *         reinvocation is required to finish the operation or WMA_ERROR on error.
+ * @return Returns enum JSR120_STATUS, JSR120_OK on success, JSR120_NET_WOULDBLOCK if
+ *         reinvocation is required to finish the operation or JSR120_ERROR on error.
  */
-WMA_STATUS jsr120_send_sms(jchar msgType,
+JSR120_STATUS jsr120_send_sms(jchar msgType,
                               unsigned char address[],
                               unsigned char msgBuffer[],
                               jchar msgLen,
@@ -78,7 +77,7 @@ WMA_STATUS jsr120_send_sms(jchar msgType,
                               /* OUT */jint *bytesSent,
                               /* OUT */void **pContext)
 {
-    WMA_STATUS status = WMA_ERR; 
+    JSR120_STATUS status = JSR120_ERR; 
 
     /* Calls platform code to send SMS. */
     status =  jsr120_sms_write(msgType, address,
@@ -90,8 +89,8 @@ WMA_STATUS jsr120_send_sms(jchar msgType,
                                pContext);
 
    
-    if (status == WMA_NET_SUCCESS) {
-        status = WMA_OK;
+    if (status == JSR120_NET_SUCCESS) {
+        status = JSR120_OK;
     }
 
     return status;
@@ -109,12 +108,12 @@ WMA_STATUS jsr120_send_sms(jchar msgType,
  *
  * @param port The port number to be removed.
  *
- * @return Returns enum WMA_STATUS, WMA_SUCCESS on success or
- *	   WMA_ERROR on error.
+ * @return Returns enum JSR120_STATUS, JSR120_SUCCESS on success or
+ *	   JSR120_ERROR on error.
  */
-WMA_STATUS jsr120_remove_sms_listening_port(jchar port) {
+JSR120_STATUS jsr120_remove_sms_listening_port(jchar port) {
     (void)port;
-    return WMA_OK;
+    return JSR120_OK;
 }
 
 /**
@@ -127,12 +126,12 @@ WMA_STATUS jsr120_remove_sms_listening_port(jchar port) {
  *
  * @param port The registered port number.
  *
- * @return Returns enum WMA_STATUS, WMA_SUCCESS on success or
- *	   WMA_ERROR on error.
+ * @return Returns enum JSR120_STATUS, JSR120_SUCCESS on success or
+ *	   JSR120_ERROR on error.
  */
-WMA_STATUS jsr120_add_sms_listening_port(jchar port) {
+JSR120_STATUS jsr120_add_sms_listening_port(jchar port) {
     (void)port;
-    return WMA_OK;
+    return JSR120_OK;
 }
 
 /**
@@ -181,9 +180,7 @@ void jsr120_notify_sms_send_completed(jint *bytesSent) {
 /**:
  * Returns the number of segments that would be needed in the underlying
  * protocol to send a specified message. The specified message is included as a
- * parameter of this function. Note that this method does not actually send the
- * message. It will only calculate the number of protocol segments needed for
- * sending the message.
+ * parameter of this function. 
  *
  * @param msgBuffer The message body.
  * @param msgLen Message body length (in bytes).
@@ -192,10 +189,10 @@ void jsr120_notify_sms_send_completed(jint *bytesSent) {
  * @param numSegments The number of message segments that would be required to send the
  *			message is returned here.
  *
- * @return <code>WMA_OK</code> when successful;
- *     <code>WMA_ERR</code>, otherwise.
+ * @return <code>JSR120_OK</code> when successful;
+ *     <code>JSR120_ERR</code>, otherwise.
  */
-WMA_STATUS jsr120_number_of_sms_segments(unsigned char msgBuffer[], jint msgLen, jint msgType,
+JSR120_STATUS jsr120_number_of_sms_segments(unsigned char msgBuffer[], jint msgLen, jint msgType,
                                             jboolean hasPort, /* OUT */jint *numSegments) {
 
     /** The number of bytes in one message fragment. */
@@ -257,6 +254,6 @@ WMA_STATUS jsr120_number_of_sms_segments(unsigned char msgBuffer[], jint msgLen,
         *numSegments = (msgLen + fragmentSize - 1) / fragmentSize;
     }
 
-    return WMA_OK;
+    return JSR120_OK;
 }
 
