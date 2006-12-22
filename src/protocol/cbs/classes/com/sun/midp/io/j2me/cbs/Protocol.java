@@ -422,9 +422,8 @@ public class Protocol extends ProtocolBase {
             }
 
         } catch (InterruptedIOException ex) {
+
             throw new InterruptedIOException("MessageConnection closed.");
-        } catch (IOException ex) {
-            io2InterruptedIOExc(ex, "receiving");
         }
 
         return msg;
