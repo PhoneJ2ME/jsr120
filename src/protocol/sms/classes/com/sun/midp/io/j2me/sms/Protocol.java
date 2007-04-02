@@ -562,16 +562,11 @@ public class Protocol extends ProtocolBase {
             boolean hasPort = false;
             String addr = msg.getAddress();
             if (addr != null) {
-                // workaround. HttpUrl can throw IAE on zero port.
-                try {
-                    HttpUrl url = new HttpUrl(addr);
-                    if (url.port != -1) {
-                        /* No port supplied. */
-                        hasPort = true;
-                    }
-                } catch (IllegalArgumentException iae) {
-                    hasPort = false;
-                }	
+                HttpUrl url = new HttpUrl(addr);
+                if (url.port != -1) {
+                    /* No port supplied. */
+                    hasPort = true;
+                }
 
                 if (addr.startsWith("cbs:")) {
                     // Can't send a CBS message.
