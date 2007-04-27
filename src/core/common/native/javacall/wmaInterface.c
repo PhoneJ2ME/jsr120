@@ -32,7 +32,6 @@
 #include <jsr120_cbs_protocol.h>
 #include <jsr120_sms_listeners.h>
 #if (ENABLE_JSR_205)
-#include <jsr205_mms_listeners.h>
 #include <jsr205_mms_protocol.h>
 #endif
 
@@ -64,13 +63,13 @@ static int checkfilter(char *filter, char *ip);
  * Defined in wmaSocket.c
  * Called from midp loop on WMA signal.
  */
-jboolean jsr120_check_signal(midpSignalType signalType, int fd) {
+jboolean jsr120_check_signal(midpSignalType signalType, int descriptor, int status) {
     char *filter = NULL;
 
     switch (signalType) {
     case WMA_SMS_READ_SIGNAL:
     {
-        SmsMessage* sms = (SmsMessage*)fd;
+        SmsMessage* sms = (SmsMessage*)descriptor;
         filter = pushgetfilter("sms://:", sms->destPortNum);
         if (filter == NULL || checkfilter(filter, sms->msgAddr)) {
             pushsetcachedflag("sms://:", sms->destPortNum);
@@ -83,7 +82,7 @@ jboolean jsr120_check_signal(midpSignalType signalType, int fd) {
         return KNI_TRUE;
     case WMA_CBS_READ_SIGNAL:
     {
-        CbsMessage* cbs = (CbsMessage*)fd;
+        CbsMessage* cbs = (CbsMessage*)descriptor;
         pushsetcachedflag("cbs://:", cbs->msgID);
         jsr120_cbs_pool_add_msg(cbs);
         return KNI_TRUE;
@@ -91,18 +90,26 @@ jboolean jsr120_check_signal(midpSignalType signalType, int fd) {
 #if (ENABLE_JSR_205)
     case WMA_MMS_READ_SIGNAL:
     {
-        MmsMessage* mms = (MmsMessage*)fd;
+        MmsMessage* mms = (MmsMessage*)descriptor;
         filter = pushgetfiltermms("mms://:", mms->appID);
         if (filter == NULL || checkfilter(filter, mms->replyToAppID)) {
             pushsetcachedflagmms("mms://:", mms->appID);
-            if (jsr205_fetch_mms() == WMA_OK) {
-                jsr205_mms_pool_add_msg(mms);
+
+            //if mms available notification only
+            if (mms->msgLen == -1) {
+                //mms->data contains javacall_handler for this case
+                jsr205_notify_mms_available((int)mms->msgBuffer, mms->appID);
+                jsr205_mms_delete_msg(mms);
+            } else {
+                jsr205_notify_incoming_mms(mms);
+                //jsr205_mms_pool_add_msg(mms);
             }
         }
         return KNI_TRUE;
     }
     case WMA_MMS_WRITE_SIGNAL:
-        jsr205_mms_message_sent_notifier();
+
+        jsr205_mms_notify_send_completed((int)descriptor, (WMA_STATUS)status);
     	return KNI_TRUE;
 #endif
     }
