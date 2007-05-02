@@ -73,18 +73,25 @@ jboolean jsr120_check_signal(midpSignalType signalType, int descriptor, int stat
         filter = pushgetfilter("sms://:", sms->destPortNum);
         if (filter == NULL || checkfilter(filter, sms->msgAddr)) {
             pushsetcachedflag("sms://:", sms->destPortNum);
-            jsr120_sms_pool_add_msg(sms);
+
+            jsr120_notify_incoming_sms(
+                sms->encodingType, sms->msgAddr, sms->msgBuffer, sms->msgLen,
+                sms->sourcePortNum, sms->destPortNum, sms->timeStamp);
+            jsr120_sms_delete_msg(sms); //delete in javacall mem
         }
         return KNI_TRUE;
     }
     case WMA_SMS_WRITE_SIGNAL:
-        jsr120_sms_message_sent_notifier();
+        jsr120_notify_sms_send_completed((int)descriptor, (WMA_STATUS)status);
         return KNI_TRUE;
     case WMA_CBS_READ_SIGNAL:
     {
         CbsMessage* cbs = (CbsMessage*)descriptor;
         pushsetcachedflag("cbs://:", cbs->msgID);
-        jsr120_cbs_pool_add_msg(cbs);
+
+	jsr120_notify_incoming_cbs(
+            cbs->encodingType, cbs->msgID, cbs->msgBuffer, cbs->msgLen);
+        jsr120_cbs_delete_msg(cbs); //delete in javacall mem
         return KNI_TRUE;
     }
 #if (ENABLE_JSR_205)
@@ -99,11 +106,11 @@ jboolean jsr120_check_signal(midpSignalType signalType, int descriptor, int stat
             if (mms->msgLen == -1) {
                 //mms->data contains javacall_handler for this case
                 jsr205_notify_mms_available((int)mms->msgBuffer, mms->appID);
-                jsr205_mms_delete_msg(mms);
             } else {
-                jsr205_notify_incoming_mms(mms);
-                //jsr205_mms_pool_add_msg(mms);
+                jsr205_notify_incoming_mms(mms->fromAddress, mms->appID,
+                    mms->replyToAppID, mms->msgLen, mms->msgBuffer);
             }
+            jsr205_mms_delete_msg(mms); //delete in javacall mem
         }
         return KNI_TRUE;
     }

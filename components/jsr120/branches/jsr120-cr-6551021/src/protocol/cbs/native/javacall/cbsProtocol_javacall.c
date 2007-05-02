@@ -80,10 +80,8 @@ WMA_STATUS jsr120_remove_cbs_listening_msgID(jchar msgID) {
  */
 void jsr120_notify_incoming_cbs(jchar msgType, jchar msgID,
                                 unsigned char *msgBuffer, jint msgLen) {
-    (void)msgType;
-    (void)msgID;
-    (void)msgBuffer;
-    (void)msgLen;
-}
 
+    CbsMessage* cbs = jsr120_cbs_new_msg(msgType, msgID, (jchar)msgLen, msgBuffer);
+    jsr120_cbs_pool_add_msg(cbs);
+}
 
