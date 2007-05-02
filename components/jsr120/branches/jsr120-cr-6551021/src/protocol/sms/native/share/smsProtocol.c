@@ -342,12 +342,6 @@ Java_com_sun_midp_io_j2me_sms_Protocol_send0(void) {
 
                     stillWaiting = KNI_TRUE;
                     break;
-                } else {
-                    /*
-                     * Message successfully sent.
-                     * Call send completion function.
-                     */
-                    jsr120_notify_sms_send_completed(&bytesSent);
                 }
             }
         } while (0);
