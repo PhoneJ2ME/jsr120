@@ -311,7 +311,7 @@ Java_com_sun_midp_io_j2me_sms_Protocol_send0(void) {
                 trySend = KNI_TRUE;
             }
 
-            if (trySend) {
+            if (trySend == KNI_TRUE) {
                 /* send message. */
                 status = jsr120_send_sms((jchar)messageType,
                                          pAddress,
