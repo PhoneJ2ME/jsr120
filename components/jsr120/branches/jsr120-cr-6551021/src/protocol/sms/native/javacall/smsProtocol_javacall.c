@@ -157,7 +157,7 @@ void jsr120_notify_incoming_sms(jchar msgType, char *sourceAddress,
  * been sent. When jsr120_send_sms()is called, the native software platform on the target
  * device is expected to deliver the message to the network. It then calls this callback function.
  *
- * @param javacall_handle Handle value returned from javacall_sms_send 
+ * @param handle Handle value returned from javacall_sms_send 
  * @param result indication of send completed status result: Either
  *         <tt>JAVACALL_OK</tt> on success,
  *         <tt>JAVACALL_FAIL</tt> on failure

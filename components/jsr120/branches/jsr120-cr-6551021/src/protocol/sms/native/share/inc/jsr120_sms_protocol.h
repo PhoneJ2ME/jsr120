@@ -120,7 +120,7 @@ WMA_STATUS jsr120_send_sms(jchar msgType,
  * been sent. When wma_sendSMSMessage()is called, the native software platform on the target
  * device is expected to deliver the message to the network. It then calls this callback function.   
  *
- * @param handle Handle value returned from javacall_sms_send 
+ * @param handle Handle value returned from platform send function 
  * @param result indication of send completed status result: Either
  *         <tt>JAVACALL_OK</tt> on success,
  *         <tt>JAVACALL_FAIL</tt> on failure
