@@ -66,11 +66,9 @@ WMA_STATUS jsr120_send_sms(jchar msgType,
                               jchar msgLen,
                               jchar sourcePort,
                               jchar destPort,
-                              /* OUT */jint *bytesSent,
+                              int handle,
                               /* OUT */void **pContext)
 {
-    javacall_handle pHandle;
-
     javacall_result rtn = javacall_sms_send( 
             (javacall_sms_encoding)msgType, //?
             address,
@@ -78,9 +76,8 @@ WMA_STATUS jsr120_send_sms(jchar msgType,
             (int)msgLen,
             (unsigned short)sourcePort,
             (unsigned short)destPort,
-            &pHandle); 
+            handle); 
 
-    (void)bytesSent;
     (void)pContext;
 
     return (rtn == JAVACALL_OK) ? WMA_OK : WMA_ERR ;
@@ -165,7 +162,7 @@ void jsr120_notify_incoming_sms(jchar msgType, char *sourceAddress,
 void jsr120_notify_sms_send_completed(int handle, WMA_STATUS result) {
 
     //wake up listeners
-    jsr120_sms_message_sent_notifier();
+    jsr120_sms_message_sent_notifier(handle, result);
 
     (void)handle; //need revisit
     (void)result;
