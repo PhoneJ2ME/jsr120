@@ -133,17 +133,33 @@ void jsr120_sms_message_arrival_notifier(SmsMessage* smsMessage) {
 /*
  * See jsr120_sms_listeners.h for documentation
  */
-void jsr120_sms_message_sent_notifier() {
+void jsr120_sms_message_sent_notifier(int handle, WMA_STATUS result) {
 
     /*
      * An SMS message has been sent. So unblock thread
      * blocked on WMA_SMS_WRITE_SIGNAL.
      */
-    JVMSPI_ThreadID id = jsr120_get_blocked_thread_from_signal(WMA_SMS_WRITE_SIGNAL);
 
-    if (id != 0) {
-	midp_thread_unblock(id);
+    JVMSPI_BlockedThreadInfo *blocked_threads;
+    jint n;
+    jint i;
+
+    blocked_threads = SNI_GetBlockedThreads(&n);
+
+    for (i = 0; i < n; i++) {
+	MidpReentryData *p =
+            (MidpReentryData*)(blocked_threads[i].reentry_data);
+	if (p != NULL) {
+            if (p->waitingFor == WMA_SMS_WRITE_SIGNAL) {
+                p->status = result;
+                midp_thread_unblock(blocked_threads[i].thread_id);
+		return;
+            }
+
+	}
+
     }
+
 }
 
 /**

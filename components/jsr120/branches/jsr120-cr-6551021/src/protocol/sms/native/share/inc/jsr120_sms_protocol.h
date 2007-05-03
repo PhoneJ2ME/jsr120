@@ -112,7 +112,7 @@ WMA_STATUS jsr120_send_sms(jchar msgType,
 		              jchar msgLen,
 		              jchar sourcePort,
 		              jchar destPort,
-                              /* OUT */jint *bytesSent,
+                              int handle,
                               /* OUT */void **pContext);
 
 /**
