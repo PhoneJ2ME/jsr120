@@ -37,6 +37,8 @@
 #include <jsr120_sms_listeners.h>
 #include <jsr120_sms_protocol.h>
 #include <suitestore_common.h>
+#include <push_server_resource_mgmt.h> //pushgetfiltermms
+#include <wmaPushRegistry.h> // jsr120_check_filter
 
 /*
  * Listeners registered by a currently running midlet
@@ -117,7 +119,7 @@ void jsr120_sms_message_arrival_notifier(SmsMessage* smsMessage) {
     /*
      * First invoke listeners for current midlet
      */
-    if(sms_midlet_listeners != NULL) {
+    if (sms_midlet_listeners != NULL) {
         unblocked = jsr120_invoke_sms_listeners(smsMessage, sms_midlet_listeners);
     }
 
@@ -125,9 +127,29 @@ void jsr120_sms_message_arrival_notifier(SmsMessage* smsMessage) {
      * If a listener hasn't been invoked, try the push Listeners
      */
     if (unblocked == WMA_ERR && sms_push_listeners != NULL) {
+        pushsetcachedflag("sms://:", smsMessage->destPortNum);
         unblocked = jsr120_invoke_sms_listeners(smsMessage, sms_push_listeners);
     }
 
+}
+
+/*
+ * See jsr120_sms_listeners.h for documentation
+ */
+WMA_STATUS jsr120_sms_is_message_expected(jchar port, char* addr) {
+
+    if (WMA_OK == jsr120_is_sms_midlet_listener_registered(port)) {
+        return WMA_OK;
+    }
+
+    if (WMA_OK == jsr120_is_sms_push_listener_registered(port)) {
+        char* filter = pushgetfilter("sms://:", port);
+        if (filter == NULL || jsr120_check_filter(filter, addr)) {
+            return WMA_OK;
+        }
+    }
+
+    return WMA_ERR;
 }
 
 /*

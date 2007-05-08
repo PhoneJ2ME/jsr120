@@ -45,6 +45,16 @@ extern "C" {
 void jsr120_sms_message_arrival_notifier(SmsMessage* smsMessage);
 
 /**
+ * Checks whether the specified port has been registered by midlet 
+ * or push registry for receiving SMS messages. For the case of
+ * push registry checks that sourceAddress matches push filter.
+ *
+ * @param port SMS port to be registered
+ * @param addr SMS source address
+ */
+WMA_STATUS jsr120_sms_is_message_expected(jchar port, char* addr);
+
+/**
  * This is the method that gets called as soon as
  * a SMS message is sent.
  *
