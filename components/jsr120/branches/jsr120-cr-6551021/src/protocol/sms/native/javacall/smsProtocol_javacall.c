@@ -144,9 +144,16 @@ void jsr120_notify_incoming_sms(jchar msgType, char *sourceAddress,
                                 jchar sourcePortNum, jchar destPortNum,
                                 jlong timeStamp) {
 
-    SmsMessage* sms = jsr120_sms_new_msg(
-        msgType, sourceAddress, sourcePortNum, destPortNum, timeStamp, msgLen, msgBuffer);
-    jsr120_sms_pool_add_msg(sms);
+    if (WMA_OK == jsr120_sms_is_message_expected(destPortNum, sourceAddress)) {
+
+        SmsMessage* sms = jsr120_sms_new_msg(
+            msgType, sourceAddress, sourcePortNum, destPortNum, timeStamp, msgLen, msgBuffer);
+
+        jsr120_sms_pool_add_msg(sms);
+
+        /* Notify all listeners of the new message. */
+        jsr120_sms_message_arrival_notifier(sms);
+    } 
 }
 
 /**
