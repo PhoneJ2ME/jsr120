@@ -419,15 +419,6 @@ Java_com_sun_midp_io_j2me_sms_Protocol_receive0(void) {
 
             if (psmsData != NULL) {
                 if (NULL != (psmsData = jsr120_sms_pool_retrieve_next_msg(port))) {
-                    /*
-                     * A message has been retreived successfully. Notify
-                     * the platform.
-                     */
-                    jsr120_notify_incoming_sms(psmsData->encodingType, psmsData->msgAddr,
-                                               (unsigned char *)psmsData->msgBuffer,
-                                               (jint)psmsData->msgLen,
-                                               psmsData->sourcePortNum, psmsData->destPortNum,
-                                               psmsData->timeStamp);
 
                     KNI_GetObjectClass(messageObject, messageClazz);
                     if(KNI_IsNullHandle(messageClazz)) {
