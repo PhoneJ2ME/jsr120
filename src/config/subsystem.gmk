@@ -54,6 +54,9 @@ JSR_120_PACKAGES = \
     javax.wireless.messaging 
 
 EXTRA_CFLAGS += -DENABLE_JSR_120=1
+ifeq ($(DELETE_WMA_MSGS), true)
+EXTRA_CFLAGS += -DDELETE_WMA_MSGS=1
+endif
 JPP_DEFS     += -DENABLE_JSR_120
 
 JAVADOC_ALL_SOURCEPATH += $(JSR_120_SOURCEPATH)
@@ -216,7 +219,7 @@ endif
 
 #################################################################
 # Add java files to classes.zip
-$(MIDP_CLASSES_ZIP):: $(SUBSYSTEM_JSR_120_JAVA_FILES)
+$(MIDP_OUTPUT_DIR)/classes.zip:: $(SUBSYSTEM_JSR_120_JAVA_FILES)
 	$(appendjavafiles)
 
 # Internal paths for jsr 120 module
