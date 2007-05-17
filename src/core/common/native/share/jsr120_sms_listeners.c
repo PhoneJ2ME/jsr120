@@ -62,7 +62,6 @@ static WMA_STATUS jsr120_sms_push_listener(jint port, SmsMessage* wma_smsstruct,
 static WMA_STATUS jsr120_invoke_sms_listeners(SmsMessage* sms, ListElement *listeners);
 static JVMSPI_ThreadID
 jsr120_get_blocked_thread_from_handle(long handle, jint waitingFor);
-static JVMSPI_ThreadID jsr120_get_blocked_thread_from_signal(jint waitingFor);
 static WMA_STATUS jsr120_register_sms_listener(jchar smsPort,
                                                SuiteIdType msid,
                                                sms_listener_t* listener,
@@ -173,48 +172,16 @@ void jsr120_sms_message_sent_notifier(int handle, WMA_STATUS result) {
             (MidpReentryData*)(blocked_threads[i].reentry_data);
 	if (p != NULL) {
             if (p->waitingFor == WMA_SMS_WRITE_SIGNAL) {
+              if (handle == 0 || handle == p->descriptor) {
                 p->status = result;
                 midp_thread_unblock(blocked_threads[i].thread_id);
 		return;
+              }
             }
 
 	}
 
     }
-
-}
-
-/**
- * Find the first thread that can be unblocked for a given
- * signal type
- *
- * @param signalType Enumerated signal type
- *
- * @return JVMSPI_ThreadID Java thread id than can be unblocked
- *         0 if no matching thread can be found
- *
- */
-static JVMSPI_ThreadID jsr120_get_blocked_thread_from_signal(jint waitingFor) {
-    JVMSPI_BlockedThreadInfo *blocked_threads;
-    jint n;
-    jint i;
-
-    blocked_threads = SNI_GetBlockedThreads(&n);
-
-    for (i = 0; i < n; i++) {
-	MidpReentryData *p =
-            (MidpReentryData*)(blocked_threads[i].reentry_data);
-	if (p != NULL) {
-
-            if (waitingFor == (int)p->waitingFor) {
-		return blocked_threads[i].thread_id;
-            }
-
-	}
-
-    }
-
-    return 0;
 
 }
 

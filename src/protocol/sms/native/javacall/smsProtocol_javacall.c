@@ -168,11 +168,8 @@ void jsr120_notify_incoming_sms(jchar msgType, char *sourceAddress,
  */
 void jsr120_notify_sms_send_completed(int handle, WMA_STATUS result) {
 
-    //wake up listeners
+    /* wake up listeners */
     jsr120_sms_message_sent_notifier(handle, result);
-
-    (void)handle; //need revisit
-    (void)result;
 }
 
 /**
