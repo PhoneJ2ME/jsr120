@@ -58,8 +58,12 @@ WMA_STATUS jsr120_sms_is_message_expected(jchar port, char* addr);
  * This is the method that gets called as soon as
  * a SMS message is sent.
  *
+ * @param handle of SMS
+ * @param status indication of send completed status result: Either
+ *         <tt>WMA_OK</tt> on success,
+ *         <tt>WMA_ERR</tt> on failure
  */
-void jsr120_sms_message_sent_notifier();
+void jsr120_sms_message_sent_notifier(int handle, WMA_STATUS status);
 
 /**
  * Checks whether the specified port has been registered by this
