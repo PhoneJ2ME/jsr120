@@ -1,27 +1,27 @@
 /*
  *
  *
- * Copyright  1990-2007 Sun Microsystems, Inc. All Rights Reserved.
+ * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version
- * 2 only, as published by the Free Software Foundation.
+ * 2 only, as published by the Free Software Foundation. 
  * 
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License version 2 for more details (a copy is
- * included at /legal/license.txt).
+ * included at /legal/license.txt). 
  * 
  * You should have received a copy of the GNU General Public License
  * version 2 along with this work; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ * 02110-1301 USA 
  * 
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, CA 95054 or visit www.sun.com if you need additional
- * information or have any questions.
+ * information or have any questions. 
  */
 
 /*
@@ -46,7 +46,7 @@
   #define pcsl_mem_free free
 #endif
 
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
   #include <midpServices.h> //WMA_SMS_READ_SIGNAL, WMA_SMS_WRITE_SIGNAL, etc
   #include <midp_thread.h> //midp_thread_wait
 #else
@@ -63,7 +63,7 @@
   static const char* const midpIllegalArgumentException = "java/lang/IllegalArgumentException";
 #endif
 
-#if (ENABLE_CDC == 1)
+#ifdef ENABLE_CDC
 #define JSR120_KNI_LAYER
 #ifdef JSR_120_ENABLE_JUMPDRIVER
 #include <jsr120_jumpdriver.h>
@@ -88,6 +88,9 @@ typedef struct {
     void *pdContext;
 } jsr120_sms_message_state_data;
 
+/** Close flag. */
+static int isClosed = 0; //###
+
 /**
  * Opens an SMS connection.
  *
@@ -104,9 +107,10 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_open0) {
     /* The midlet suite name for this connection. */
     AppIdType msid = UNUSED_APP_ID;
 
-    port = KNI_GetParameterAsInt(3);
+    /* Set closed flag to false */
+    isClosed = 0;
 
-    jsr120_sms_pool_init();
+    port = KNI_GetParameterAsInt(3);
 
     /* When port is 0 then return else continue */
     if (port) {
@@ -124,7 +128,15 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_open0) {
              * Get unique handle, to identify this
              * SMS "session"..
              */
+#ifndef ENABLE_CDC
             handle = (int)(pcsl_mem_malloc(1));
+#else
+#ifdef JSR_120_ENABLE_JUMPDRIVER
+            handle = (int)jumpEventCreate();
+#else
+            handle = malloc(1);
+#endif
+#endif
             if (handle == 0) {
                KNI_ThrowNew(midpOutOfMemoryError,
                             "Unable to start SMS.");
@@ -139,9 +151,9 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_open0) {
             if (KNI_IsNullHandle(javaStringHost)) {
 
                 /* register SMS port with SMS pool */
-                if (jsr120_is_sms_midlet_listener_registered((jchar)port) == WMA_ERR) {
+                if (jsr120_is_sms_midlet_port_registered((jchar)port) == WMA_ERR) {
 
-                    if (jsr120_register_sms_midlet_listener((jchar)port,
+                    if (jsr120_register_sms_midlet_port((jchar)port,
                                                         msid,
                                                         handle) == WMA_ERR) {
 
@@ -162,35 +174,6 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_open0) {
 }
 
 /**
- * Internal helper function implementing connection close routine
- *
- * @param port The port associated with this connection.
- * @param handle The handle of the open SMS message connection.
- * @param deRegister Deregistration os the port when parameter is 1.
- */
-static void closeConnection(int port, int handle, int deRegister) {
-
-    if (port > 0 && handle != 0) {
-
-#if (ENABLE_CDC != 1)
-        /* unblock any blocked threads */
-        jsr120_sms_unblock_thread((jint)handle, WMA_SMS_READ_SIGNAL);
-#else
-        jsr120_throw_signal(handle, 0);
-#endif
-
-        if (deRegister) {
-            /** unregister SMS port from SMS pool */
-            jsr120_unregister_sms_midlet_listener((jchar)port);
-
-            /* Release the handle associated with this connection. */
-            pcsl_mem_free((void *)handle);
-        }
-
-    }
-}
-
-/**
  * Closes an open SMS connection.
  *
  * @param port The port associated with this connection.
@@ -208,16 +191,46 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_close0) {
     /** Deregistration flag. */
     int deRegister;
 
+    /* Set closed flag to true */
+    isClosed = 1;
+
     port = KNI_GetParameterAsInt(1);
     handle = KNI_GetParameterAsInt(2);
     deRegister = KNI_GetParameterAsInt(3);
 
-    closeConnection(port, handle, deRegister);
+    if (port > 0 && handle != 0) {
+
+#ifndef ENABLE_CDC
+        /* unblock any blocked threads */
+        jsr120_sms_unblock_thread((jint)handle, WMA_SMS_READ_SIGNAL);
+#else
+#ifdef JSR_120_ENABLE_JUMPDRIVER
+        jumpEventHappens((JUMPEvent)handle);
+#else
+        jsr120_throw_signal(handle, 0);
+#endif
+#endif
+
+        if (deRegister) {
+            /* unregister SMS port from SMS pool */
+            jsr120_unregister_sms_midlet_port((jchar)port);
+
+            /* Release the handle associated with this connection. */
+#ifndef ENABLE_CDC
+            pcsl_mem_free((void *)handle);
+#else
+#ifdef JSR_120_ENABLE_JUMPDRIVER
+            jumpEventDestroy((JUMPEvent)handle);
+#else
+            free((void*)handle);
+#endif
+#endif
+        }
+
+    }
 
     KNI_ReturnInt(status);
 }
-
-#define ENABLE_REENTRY (ENABLE_CDC != 1)
 
 /**
  * Sends an SMS message.
@@ -244,24 +257,19 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_send0) {
     int i;
     unsigned char *pAddress = NULL;
     unsigned char *pMessageBuffer = NULL;
+#ifndef ENABLE_CDC
+    MidpReentryData *info;
+#endif
     jboolean stillWaiting = KNI_FALSE;
     jboolean trySend = KNI_FALSE;
     void *pdContext = NULL;
-#if ENABLE_REENTRY
-    MidpReentryData *info;
+#ifndef ENABLE_CDC
     jsr120_sms_message_state_data *messageStateData = NULL;
 #endif
-    jboolean isOpen;
+    jint bytesSent;
 
-    KNI_StartHandles(4);
-
-    KNI_DeclareHandle(this);
-    KNI_DeclareHandle(thisClass);
-    KNI_GetThisPointer(this);
-    KNI_GetObjectClass(this, thisClass);
-    isOpen = KNI_GetBooleanField(this, KNI_GetFieldID(thisClass, "open", "Z"));
-    
-    if (isOpen) { /* No close in progress */
+    if (!isClosed) { /* No close in progress */
+        KNI_StartHandles(2);
         KNI_DeclareHandle(messageBuffer);
         KNI_DeclareHandle(address);
 
@@ -273,7 +281,7 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_send0) {
         KNI_GetParameterAsObject(6, messageBuffer);
 
         do {
-#if ENABLE_REENTRY
+#ifndef ENABLE_CDC
             info = (MidpReentryData*)SNI_GetReentryData(NULL);
             if (info == NULL) {	  /* First invocation. */
 #endif
@@ -316,16 +324,8 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_send0) {
                         }
                     }
                 }
-#if ENABLE_REENTRY
+#ifndef ENABLE_CDC
             } else { /* Reinvocation after unblocking the thread. */
-
-                if (info->pResult == NULL) {
-                    /* waiting for mms_send_completed event */
-                    if (info->status == WMA_ERR) {
-                        KNI_ThrowNew(midpInterruptedIOException, "Sending SMS");
-                    }
-                    break;
-                }
                 messageStateData = info->pResult;
                 pMessageBuffer = messageStateData->pMessageBuffer;
                 pAddress = messageStateData->pAddress;
@@ -335,7 +335,7 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_send0) {
             }
 #endif
 
-            if (trySend == KNI_TRUE) {
+            if (trySend) {
                 /* send message. */
                 status = jsr120_send_sms((jchar)messageType,
                                          pAddress,
@@ -343,15 +343,14 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_send0) {
                                          (jchar)messageLength,
                                          (jchar)sourcePort,
                                          (jchar)destPort,
-                                         handle,
+                                         &bytesSent,
                                          &pdContext);
 
                 if (status == WMA_ERR) {
                     KNI_ThrowNew(midpIOException, "Sending SMS");
                     break;
-                } 
-#if ENABLE_REENTRY
-                else if (status == WMA_NET_WOULDBLOCK) {
+#ifndef ENABLE_CDC
+                } else if (status == WMA_NET_WOULDBLOCK) {
                     if (messageStateData == NULL) {
                         messageStateData =
                             (jsr120_sms_message_state_data *)pcsl_mem_malloc(
@@ -368,11 +367,14 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_send0) {
 
                     stillWaiting = KNI_TRUE;
                     break;
-                } else {
-                    /* waiting for sms_send_completed event */
-                    midp_thread_wait(WMA_SMS_WRITE_SIGNAL, handle, NULL);
-                }
 #endif
+                } else {
+                    /*
+                     * Message successfully sent.
+                     * Call send completion function.
+                     */
+                    jsr120_notify_sms_send_completed(&bytesSent);
+                }
             }
         } while (0);
 
@@ -380,10 +382,9 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_send0) {
             pcsl_mem_free(pMessageBuffer);
             pcsl_mem_free(pAddress);
         }
+
+        KNI_EndHandles();
     }
-
-    KNI_EndHandles();
-
     KNI_ReturnInt(0); /* currently ignored. */
 }
 
@@ -398,7 +399,7 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_send0) {
  */
 KNIEXPORT KNI_RETURNTYPE_INT
 KNIDECL(com_sun_midp_io_j2me_sms_Protocol_receive0) {
-#if ENABLE_REENTRY
+#ifndef ENABLE_CDC
     MidpReentryData *info = (MidpReentryData*)SNI_GetReentryData(NULL);
 #endif
     int port, handle;
@@ -406,17 +407,9 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_receive0) {
     SmsMessage *psmsData = NULL;
     /* The midlet suite name for this connection. */
     AppIdType msid = UNUSED_APP_ID;
-    jboolean isOpen;
 
-    KNI_StartHandles(6);
-
-    KNI_DeclareHandle(this);
-    KNI_DeclareHandle(thisClass);
-    KNI_GetThisPointer(this);
-    KNI_GetObjectClass(this, thisClass);
-    isOpen = KNI_GetBooleanField(this, KNI_GetFieldID(thisClass, "open", "Z"));
-
-    if (isOpen) { /* No close in progress */
+    if (!isClosed) { /* No close in progress */
+        KNI_StartHandles(4);
         KNI_DeclareHandle(messageClazz);
         KNI_DeclareHandle(messageObject);
         KNI_DeclareHandle(addressArray);
@@ -428,25 +421,32 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_receive0) {
         KNI_GetParameterAsObject(4, messageObject);
 
         do {
-#if ENABLE_REENTRY
+#ifndef ENABLE_CDC
             if (!info) {
 #endif
                 psmsData = jsr120_sms_pool_peek_next_msg((jchar)port);
                 if (psmsData == NULL) {
-#if ENABLE_REENTRY
+#ifndef ENABLE_CDC
                     /* block and wait for a message. */
                     midp_thread_wait(WMA_SMS_READ_SIGNAL, handle, NULL);
+#else
+#ifdef JSR_120_ENABLE_JUMPDRIVER
+        CVMD_gcSafeExec(_ee, {
+                    if (jumpEventWait((JUMPEvent)handle) == 0) {
+                        psmsData = jsr120_sms_pool_peek_next_msg((jchar)port);
+                    }
+        }); 
 #else
         do {
             CVMD_gcSafeExec(_ee, {
                 jsr120_wait_for_signal(handle, WMA_SMS_READ_SIGNAL);
             });
             psmsData = jsr120_sms_pool_peek_next_msg((jchar)port);
-            isOpen = KNI_GetBooleanField(this, KNI_GetFieldID(thisClass, "open", "Z"));
-        } while (psmsData == NULL && isOpen);
+        } while (psmsData == NULL && isClosed == 0);
+#endif
 #endif
                 }
-#if ENABLE_REENTRY
+#ifndef ENABLE_CDC
             } else {
                 /* reentry. */
                 psmsData = jsr120_sms_pool_peek_next_msg((jchar)port);
@@ -455,6 +455,15 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_receive0) {
 
             if (psmsData != NULL) {
                 if (NULL != (psmsData = jsr120_sms_pool_retrieve_next_msg(port))) {
+                    /*
+                     * A message has been retreived successfully. Notify
+                     * the platform.
+                     */
+                    jsr120_notify_incoming_sms(psmsData->encodingType, psmsData->msgAddr,
+                                               (unsigned char *)psmsData->msgBuffer,
+                                               (jint)psmsData->msgLen,
+                                               psmsData->sourcePortNum, psmsData->destPortNum,
+                                               psmsData->timeStamp);
 
                     KNI_GetObjectClass(messageObject, messageClazz);
                     if(KNI_IsNullHandle(messageClazz)) {
@@ -532,10 +541,9 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_receive0) {
         } while (0);
 
         jsr120_sms_delete_msg(psmsData);
+
+        KNI_EndHandles();
     }
-
-    KNI_EndHandles();
-
     KNI_ReturnInt(messageLength);
 }
 
@@ -549,24 +557,15 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_receive0) {
  */
 KNIEXPORT KNI_RETURNTYPE_INT
 KNIDECL(com_sun_midp_io_j2me_sms_Protocol_waitUntilMessageAvailable0) {
-#if ENABLE_REENTRY
+#ifndef ENABLE_CDC
     MidpReentryData *info = (MidpReentryData*)SNI_GetReentryData(NULL);
 #endif
     int port;
     int handle;
     int messageLength = -1;
     SmsMessage *pSMSData = NULL;
-    jboolean isOpen;
 
-    KNI_StartHandles(2);
-
-    KNI_DeclareHandle(this);
-    KNI_DeclareHandle(thisClass);
-    KNI_GetThisPointer(this);
-    KNI_GetObjectClass(this, thisClass);
-    isOpen = KNI_GetBooleanField(this, KNI_GetFieldID(thisClass, "open", "Z"));
-
-    if (isOpen) { /* No close in progress */
+    if (!isClosed) { /* No close in progress */
         port = KNI_GetParameterAsInt(1);
         handle = KNI_GetParameterAsInt(2);
 
@@ -587,11 +586,23 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_waitUntilMessageAvailable0) {
             if (pSMSData != NULL) {
                 messageLength = pSMSData->msgLen;
             } else {
-#if ENABLE_REENTRY
+#ifndef ENABLE_CDC
                 if (!info) {
 
                      /* Block and wait for a message. */
                     midp_thread_wait(WMA_SMS_READ_SIGNAL, handle, NULL);
+#else
+#ifdef JSR_120_ENABLE_JUMPDRIVER
+        CVMD_gcSafeExec(_ee, {
+                    if (jumpEventWait((JUMPEvent)handle) != 0) {
+                        messageLength = -1;
+                    } else {
+                        pSMSData = jsr120_sms_pool_peek_next_msg1((jchar)port, 1);
+                        if (pSMSData != NULL) {
+                            messageLength = pSMSData->msgLen;
+                        }
+                    }
+        }); 
 #else
         CVMD_gcSafeExec(_ee, {
             jsr120_wait_for_signal(handle, WMA_SMS_READ_SIGNAL);
@@ -601,7 +612,8 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_waitUntilMessageAvailable0) {
             }
         }); 
 #endif
-#if ENABLE_REENTRY
+#endif
+#ifndef ENABLE_CDC
                 } else {
                      /* May have been awakened due to interrupt. */
                      messageLength = -1;
@@ -610,9 +622,6 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_waitUntilMessageAvailable0) {
             }
         }
     }
-
-    KNI_EndHandles();
-
     KNI_ReturnInt(messageLength);
 }
 
@@ -683,24 +692,13 @@ KNIDECL(com_sun_midp_io_j2me_sms_Protocol_numberOfSegments0) {
  */
 KNIEXPORT KNI_RETURNTYPE_VOID
 KNIDECL(com_sun_midp_io_j2me_sms_Protocol_finalize) {
-    int port;
-    int handle;
-    jboolean isOpen;
 
-    KNI_StartHandles(2);
-    KNI_DeclareHandle(this);
-    KNI_DeclareHandle(thisClass);
+    KNI_StartHandles(1);
+    KNI_DeclareHandle(instance);
 
-    KNI_GetThisPointer(this);
-    KNI_GetObjectClass(this, thisClass);
-    isOpen = KNI_GetBooleanField(this, KNI_GetFieldID(thisClass, "open", "Z"));
+    KNI_GetThisPointer(instance);
 
-    if (isOpen) {
-        port = KNI_GetIntField(this, KNI_GetFieldID(thisClass, "m_iport", "I"));
-        handle = KNI_GetIntField(this, KNI_GetFieldID(thisClass, "connHandle", "I"));
-
-        closeConnection(port, handle, 1);
-    }
+//    REPORT_ERROR(LC_WMA, "Stubbed out: Java_com_sun_midp_io_j2me_sms_Protocol_finalize");
 
     KNI_EndHandles();
 

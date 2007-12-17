@@ -1,27 +1,27 @@
 /*
  *
  *
- * Copyright  1990-2007 Sun Microsystems, Inc. All Rights Reserved.
+ * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version
- * 2 only, as published by the Free Software Foundation.
+ * 2 only, as published by the Free Software Foundation. 
  * 
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License version 2 for more details (a copy is
- * included at /legal/license.txt).
+ * included at /legal/license.txt). 
  * 
  * You should have received a copy of the GNU General Public License
  * version 2 along with this work; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ * 02110-1301 USA 
  * 
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, CA 95054 or visit www.sun.com if you need additional
- * information or have any questions.
+ * information or have any questions. 
  */
 
 package com.sun.midp.io.j2me.sms;
@@ -191,21 +191,21 @@ public class Protocol extends ProtocolBase {
      */
 
     /**
-     * Constructs a new message object of a text or binary type.
-     * If the <code>TEXT_MESSAGE</code> constant is passed in, the
-     * <code>TextMessage</code> interface is implemented by the created object.
-     * If the <code>BINARY_MESSAGE</code> constant is passed in, the
-     * <code>BinaryMessage</code> interface is implemented by the created
-     * object.
+     * Constructs a new message object of a text or binary type. When the
+     * <code>TEXT_MESSAGE</code> constant is passed in, the created
+     * object implements the <code>TextMessage</code> interface.
+     * When the <code>BINARY_MESSAGE</code> constant is passed in, the
+     * created object implements the <code>BinaryMessage</code>
+     * interface.
      * <p>
      * If this method is called in a sending mode, a new <code>Message</code>
      * object is requested from the connection. For example:
      * <p>
      * <code>Message msg = conn.newMessage(TEXT_MESSAGE);</code>
      * <p>
-     * The <code>Message</code> object that was created doesn't have the
-     * destination address set. It's the application's responsibility to set it
-     * before the message is sent.
+     * The newly created <code>Message</code> does not have the destination
+     * address set. It must be set by the application before
+     * the message is sent.
      * <p>
      * If this method is called in receiving mode, the
      * <code>Message</code> object does have
@@ -227,7 +227,6 @@ public class Protocol extends ProtocolBase {
     public Message newMessage(String type) {
 	String address = null;
 
-System.out.println("sms.Protocol.newMessage, type = " + type);
 	/*
          * Provide the default address from the original open.
          */
@@ -245,11 +244,12 @@ System.out.println("sms.Protocol.newMessage, type = " + type);
     /**
      * Constructs a new message object of a text or binary type and specifies
      * a destination address.
-     * If the <code>TEXT_MESSAGE</code> constant is passed in, the
-     * <code>TextMessage</code> interface is implemented by the created object.
-     * If the <code>BINARY_MESSAGE</code> constant is passed in, the
-     * <code>BinaryMessage</code> interface is implemented by the created
-     * object.
+     * When the
+     * <code>TEXT_MESSAGE</code> constant is passed in, the created
+     * object implements the <code>TextMessage</code> interface.
+     * When the <code>BINARY_MESSAGE</code> constant is passed in, the
+     * created object implements the <code>BinaryMessage</code>
+     * interface.
      * <p>
      * The destination address <code>addr</code> has the following format:
      * </p>
@@ -368,8 +368,6 @@ System.out.println("sms.Protocol.newMessage, type = " + type);
 	} catch (InterruptedIOException ex) {
             length = 0;
             throw new InterruptedIOException("MessageConnection is closed");
-        } catch (IOException ex) {
-            io2InterruptedIOExc(ex, "receiving");
 	} finally {
 	    if (length < 0) {
 		throw new InterruptedIOException("Connection closed error");
@@ -488,9 +486,6 @@ System.out.println("sms.Protocol.newMessage, type = " + type);
         if (dmsg instanceof TextObject)	 {
             byte[] gsm7bytes;
             msgBuffer = ((TextObject)dmsg).getBytes();
-            if (url.port == 0) {
-                messageType = GSM_UCS2;
-            } else
 	    if (msgBuffer != null) {
                 /*
                  * Attempt to encode the UCS2 bytes as GSM 7-bit.
@@ -513,15 +508,11 @@ System.out.println("sms.Protocol.newMessage, type = " + type);
             throw new IllegalArgumentException("Message type not supported");
 	}
 
-        try {
-            send0(connHandle, messageType,
+        int status = send0(connHandle, messageType,
                            url.host,
                            url.port,
 			   sourcePort,
                            msgBuffer);
-        } catch (IOException ex) {
-            io2InterruptedIOExc(ex, "sending");
-        }
     }
 
     /**
@@ -532,18 +523,19 @@ System.out.println("sms.Protocol.newMessage, type = " + type);
      * it will only calculate the number of protocol segments
      * needed for sending it.
      * </p>
-     * <p>This method calculates the number of segments required
-     * when this message is split into the protocol segments
-     * utilizing the underlying protocol's features.
-     * Possible implementation's limitations that may limit the number of
-     * segments that can be sent using it are not taken into account. These
-     * limitations are protocol specific. They are documented
-     * with that protocol's adapter definition.
+     * <p>This method will calculate the number of segments
+     * needed when this message is split into the protocol
+     * segments using the appropriate features of the underlying protocol.
+     * This method does not take into account possible limitations
+     * of the implementation that may limit the number of
+     * segments that can be sent using this feature. These
+     * limitations are protocol specific and are documented
+     * with the adapter definition for that protocol.
      * </p>
      * @param msg the message to be used for the calculation
-     * @return number of protocol segments required to send the message.
-     *     If the <code>Message</code> object can't be sent using
-     *     the underlying protocol, <code>0</code> is returned.
+     * @return number of protocol segments needed for sending the message.
+     *     Returns <code>0</code> if the <code>Message</code> object cannot be
+     *     sent using the underlying protocol.
      */
     public int numberOfSegments(Message msg) {
 
@@ -619,44 +611,37 @@ System.out.println("sms.Protocol.newMessage, type = " + type);
 
 	m_iport = 0;
 
-        synchronized (closeLock) {
-            if (open) {
-                /*
-                 * Reset open flag early to prevent receive0 executed by
-                 * concurrent thread to operate on partially closed
-                 * connection
-                 */
-                open = false;
+        /*
+	 * last connection closing
+         */
+	close0(save_iport, connHandle, 1);
 
-                close0(save_iport, connHandle, 1);
+        setMessageListener(null);
 
-                setMessageListener(null);
+        /*
+         * Reset handle and other params to default
+         * values. Multiple calls to close() are allowed
+         * by the spec and the resetting would prevent any
+         * strange behaviour.
+         */
+        connHandle = 0;
+	open = false;
+	host = null;
+	m_mode = 0;
 
-                /*
-                 * Reset handle and other params to default
-                 * values. Multiple calls to close() are allowed
-                 * by the spec and the resetting would prevent any
-                 * strange behaviour.
-                 */
-                connHandle = 0;
-                host = null;
-                m_mode = 0;
-
-                /*
-                 * Remove this connection from the list of open
-                 * connections.
-                 */
-                int len = openconnections.size();
-                for (int i = 0; i < len; i++) {
-                    if (openconnections.elementAt(i) == this) {
-                        openconnections.removeElementAt(i);
-                        break;
-                    }
-                }
-
-                open_count--;
+        /*
+         * Remove this connection from the list of open
+         * connections.
+         */
+        int len = openconnections.size();
+        for (int i = 0; i < len; i++) {
+            if (openconnections.elementAt(i) == this) {
+                openconnections.removeElementAt(i);
+                break;
             }
         }
+
+	open_count--;
     }
 
     /*
@@ -1016,12 +1001,12 @@ System.out.println("sms.Protocol.newMessage, type = " + type);
      * @return number of bytes sent
      * @exception IOException  if an I/O error occurs
      */
-    private native int send0(int handle,
-                             int type,
-                             String host,
-                             int destPort,
-                             int sourcePort,
-                             byte[] message) throws IOException;
+    static private native int send0(int handle,
+                                    int type,
+                                    String host,
+				    int destPort,
+				    int sourcePort,
+				    byte[] message);
 
     /**
      * Receives SMS message
@@ -1033,8 +1018,8 @@ System.out.println("sms.Protocol.newMessage, type = " + type);
      * @return number of bytes received
      * @exception IOException  if an I/O error occurs
      */
-    private native int receive0(int port, int msid, int handle,
-                                SMSPacket smsPacket) throws IOException;
+    static private native int receive0(int port, int msid, int handle,
+			       SMSPacket smsPacket) throws IOException;
 
     /**
      * Waits until message available

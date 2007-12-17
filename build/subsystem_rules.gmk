@@ -22,19 +22,16 @@
 # information or have any questions. 
 #
 
-JSR_120_EXTRA_CFLAGS  += -DENABLE_MIDP=1
+ifneq ($(TARGET_VM),cldc_vm)
 
-JSR_120_BUILD_DIR     = $(MIDP_OUTPUT_DIR)
-JSR_120_GENERATED_DIR = $(GENERATED_DIR)
-JSR_120_BINDIR        = $(BINDIR)
+# CDC-specific build
+#
+include $(JSR_120_DIR)/build/cdc_share/cdc_rules.gmk
 
-include $(JSR_120_DIR)/build/share/common_defs.gmk
+else
 
-JTWI_I3TEST_JAVA_FILES              += $(SUBSYSTEM_JSR_120_I3TEST_JAVA_FILES)
-JTWI_NATIVE_FILES                   += $(SUBSYSTEM_JSR_120_NATIVE_FILES)
-EXTRA_INCLUDES                      += $(SUBSYSTEM_JSR_120_EXTRA_INCLUDES)
-EXTRA_CFLAGS                        += $(JSR_120_EXTRA_CFLAGS)
-SUBSYSTEM_CONFIGURATION_INPUT_FILES += $(JSR_120_PROPERTY_FILES)
+# CLDC-specific build
+#
+include $(JSR_120_DIR)/build/cldc_application/cldc_rules.gmk
 
-
-
+endif

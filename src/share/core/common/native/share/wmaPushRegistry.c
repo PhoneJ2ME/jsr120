@@ -1,27 +1,27 @@
 /*
  *
  *
- * Copyright  1990-2007 Sun Microsystems, Inc. All Rights Reserved.
+ * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version
- * 2 only, as published by the Free Software Foundation.
+ * 2 only, as published by the Free Software Foundation. 
  * 
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License version 2 for more details (a copy is
- * included at /legal/license.txt).
+ * included at /legal/license.txt). 
  * 
  * You should have received a copy of the GNU General Public License
  * version 2 along with this work; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ * 02110-1301 USA 
  * 
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, CA 95054 or visit www.sun.com if you need additional
- * information or have any questions.
+ * information or have any questions. 
  */
 
 #include <string.h>
@@ -223,7 +223,7 @@ static int registerSMSEntry(int port, AppIdType msid) {
     int handle = -1;
 
     /* register SMS port */
-    if (jsr120_is_sms_push_listener_registered((jchar)port) == WMA_ERR) {
+    if (jsr120_is_sms_push_port_registered((jchar)port) == WMA_ERR) {
 
 	/* Get a unique handle that will identify this SMS "session" */
 	handle = (int)(pcsl_mem_malloc(1));
@@ -232,7 +232,7 @@ static int registerSMSEntry(int port, AppIdType msid) {
             return -1;
 	}
 
-        if (jsr120_register_sms_push_listener((jchar)port,
+        if (jsr120_register_sms_push_port((jchar)port,
                                           msid,
                                           handle) == WMA_ERR) {
 	    return -1;
@@ -248,7 +248,7 @@ static int registerSMSEntry(int port, AppIdType msid) {
 static void unregisterSMSEntry(int port, int handle) {
 
     /** unregister SMS port from SMS pool */
-    jsr120_unregister_sms_push_listener((jchar)port);
+    jsr120_unregister_sms_push_port((jchar)port);
 
     /* Release the handle associated with this connection. */
     if (handle) {
@@ -261,7 +261,7 @@ static int registerCBSEntry(int msgID, AppIdType msid) {
     int handle = -1;
 
     /* register CBS message ID */
-    if (jsr120_cbs_is_push_listener_registered((jchar)msgID) == WMA_ERR) {
+    if (jsr120_cbs_is_push_msgID_registered((jchar)msgID) == WMA_ERR) {
 
 	/* Get a unique handle that will identify this CBS "session" */
 	handle = (int)(pcsl_mem_malloc(1));
@@ -270,7 +270,7 @@ static int registerCBSEntry(int msgID, AppIdType msid) {
             return -1;
 	}
 
-        if (jsr120_cbs_register_push_listener((jchar)msgID,
+        if (jsr120_cbs_register_push_msgID((jchar)msgID,
                                            msid,
                                            handle) == WMA_ERR) {
 	    return -1;
@@ -286,7 +286,7 @@ static int registerCBSEntry(int msgID, AppIdType msid) {
 static void unregisterCBSEntry(int msgID, int handle) {
 
     /** unregister CBS msg ID from CBS pool */
-    jsr120_cbs_unregister_push_listener((jchar)msgID);
+    jsr120_cbs_unregister_push_msgID((jchar)msgID);
 
     /* Release the handle associated with this connection. */
     pcsl_mem_free((void *)handle);
@@ -301,7 +301,7 @@ static int registerMMSEntry(unsigned char *appID,
 
     /* register MMS message ID */
     if (appID != NULL) {
-        if (jsr205_mms_is_push_listener_registered(appID) == WMA_ERR) {
+        if (jsr205_mms_is_push_appID_registered(appID) == WMA_ERR) {
 
 	    /* Get a unique handle that will identify this MMS "session" */
             handle = (int)(pcsl_mem_malloc(1));
@@ -310,9 +310,9 @@ static int registerMMSEntry(unsigned char *appID,
                 return -1;
 	    }
 
-            if (jsr205_mms_register_push_listener(appID,
-                                                  msid,
-                                                  handle) == WMA_ERR) {
+            if (jsr205_mms_register_push_appID(appID,
+                                               msid,
+                                               handle) == WMA_ERR) {
 	        return -1;
             }
         } else {
@@ -328,7 +328,7 @@ static void unregisterMMSEntry(unsigned char *appID, int handle) {
 
     /** unregister MMS app ID from MMS pool */
     if (appID != NULL) {
-        jsr205_mms_unregister_push_listener(appID);
+        jsr205_mms_unregister_push_appID(appID);
     }
 
     /* Release the handle associated with this connection. */
@@ -384,7 +384,7 @@ char *getMMSAppID(char *entry) {
 }
 #endif
 
-#if (ENABLE_CDC == 1)
+#ifdef ENABLE_CDC
 
 typedef struct filter_struct {
     int port;
@@ -503,7 +503,6 @@ KNIDECL(com_sun_midp_wma_PushConnectionsPool_addPushPort) {
     port = KNI_GetParameterAsInt(1);
     KNI_GetParameterAsObject(2, address);
 
-    jsr120_sms_pool_init();
     handle = registerSMSEntry(port, msid);
 
     if (handle != 0) {
@@ -593,93 +592,4 @@ KNIDECL(com_sun_midp_wma_PushConnectionsPool_hasAvailableData) {
 #endif
 
 #endif
-
-/**
- * check the SMS header against the push filter.
- * @param filter The filter string to be used
- * @param cmsidn The caller's MSIDN number to be tested by the filter
- * @return <code>1</code> if the comparison is successful; <code>0</code>,
- *     otherwise.
- */
-int jsr120_check_filter(char *filter, char *cmsidn) {
-    char *p1 = NULL;
-    char *p2 = NULL;
-
-    if ((cmsidn == NULL) || (filter == NULL)) return 0;
-
-    /* Filter is exactly "*", then all MSIDN numbers are allowed. */
-    if (strcmp(filter, "*") == 0) return 1;
-
-    /*
-     * Otherwise walk through the filter string looking for character
-     * matches and wildcard matches.
-     * The filter pointer is incremented in the main loop and the
-     * MSIDN pointer is incremented as characters and wildcards
-     * are matched. Checking continues until there are no more filter or
-     * MSIDN characters available.
-     */
-    for (p1=filter, p2=cmsidn; *p1 && *p2; p1++) {
-        /*
-         * For an asterisk, consume all the characters up to
-         * a matching next character.
-         */
-        if (*p1 == '*') {
-            /* Initialize the next two filter characters. */
-            char f1 = *(p1+1);
-            char f2 = '\0';
-            if (f1 != '\0') {
-                f2 = *(p1+2);
-            }
-
-            /* Skip multiple wild cards. */
-            if (f1 == '*') {
-                continue;
-            }
-
-            /*
-             * Consume all the characters up to a match of the next
-             * character from the filter string. Stop consuming
-             * characters, if the address is fully consumed.
-             */
-            while (*p2) {
-                /*
-                 * When the next character matches, check the second character
-                 * from the filter string. If it does not match, continue
-                 * consuming characters from the address string.
-                 */
-                if(*p2 == f1 || f1 == '?') {
-                    if (*(p2+1) == f2 || f2 == '?' || f2 == '*') {
-                        /* Always consume an address character. */
-                        p2++;
-                        if (f2 != '?' || *(p2+1) == '.' || *(p2+1) == '\0') {
-                            /* Also, consume a filter character. */
-                            p1++;
-                        }
-                        break;
-                    }
-                }
-                p2++;
-            }
-        } else if (*p1 == '?') {
-            p2 ++;
-        } else if (*p1 != *p2) {
-            /* If characters do not match, filter failed. */
-            return 0;
-        } else {
-            p2 ++;
- 	}
-    }
-
-    if (!(*p1)  && !(*p2) ) {
-        /* 
-         * All available filter and MSIDN characters were checked.
-         */
-        return 1;
-    } else {
-        /*
-         * Mismatch in length of filter and MSIDN string
-         */
-        return 0;
-    }
-}
 

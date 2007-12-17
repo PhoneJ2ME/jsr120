@@ -1,7 +1,7 @@
 /*
  *
  *
- * Copyright  1990-2007 Sun Microsystems, Inc. All Rights Reserved.
+ * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
  * This program is free software; you can redistribute it and/or
@@ -55,8 +55,7 @@ void jsr120_wait_for_signal(int handle, int signal) {
     CVMmutexLock(&_mutex);
     do {
         CVMcondvarWait(&_condvar, &_mutex, 0);
-    } while ( ((_handle != 0) && (handle != _handle)) || 
-              ((_signal != 0) && (signal != _signal)) ) ;
+    } while ( ((_handle != 0) && (handle != handle)) || ((_signal != 0) && (signal != _signal)) ) ;
     CVMmutexUnlock(&_mutex);
 }
 
