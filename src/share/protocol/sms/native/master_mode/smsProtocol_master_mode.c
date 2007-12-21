@@ -1,27 +1,27 @@
 /*
  *   
  *
- * Copyright  1990-2007 Sun Microsystems, Inc. All Rights Reserved.
+ * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version
- * 2 only, as published by the Free Software Foundation.
+ * 2 only, as published by the Free Software Foundation. 
  * 
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License version 2 for more details (a copy is
- * included at /legal/license.txt).
+ * included at /legal/license.txt). 
  * 
  * You should have received a copy of the GNU General Public License
  * version 2 along with this work; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ * 02110-1301 USA 
  * 
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, CA 95054 or visit www.sun.com if you need additional
- * information or have any questions.
+ * information or have any questions. 
  */
 
 #include <string.h>
@@ -30,7 +30,6 @@
 #include <string.h>
 
 #include <jsr120_sms_protocol.h>
-#include <jsr120_sms_listeners.h>
 #include <pcsl_memory.h>
 
 #define SOCKET_ERROR (-1)
@@ -76,18 +75,18 @@ WMA_STATUS jsr120_send_sms(jchar msgType,
                               jchar msgLen,
                               jchar sourcePort,
                               jchar destPort,
-                              int handle, 
+                              /* OUT */jint *bytesSent,
                               /* OUT */void **pContext)
 {
     WMA_STATUS status = WMA_ERR; 
-
+printf("send_sms\n");
     /* Calls platform code to send SMS. */
     status =  jsr120_sms_write(msgType, address,
 	                       msgBuffer,
 	                       msgLen,
 			       sourcePort,
                                destPort,
-			       &bytesSent,
+			       bytesSent,
                                pContext);
 
    
@@ -95,7 +94,6 @@ WMA_STATUS jsr120_send_sms(jchar msgType,
         status = WMA_OK;
     }
 
-    jsr120_sms_message_sent_notifier(handle, status);
     return status;
 
 }
@@ -176,9 +174,8 @@ void jsr120_notify_incoming_sms(jchar msgType, char *sourceAddress,
  *		    >= 0 on success
  *		    -1 on error
  */
-void jsr120_notify_sms_send_completed(int handle, WMA_STATUS result) {
-
-  jsr120_sms_message_sent_notifier(handle, result);
+void jsr120_notify_sms_send_completed(jint *bytesSent) {
+    (void)bytesSent;
 }
 
 /**:

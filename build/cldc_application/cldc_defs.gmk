@@ -22,12 +22,10 @@
 # information or have any questions. 
 #
 
-include $(JSR_120_DIR)/build/share/common_rules.gmk
+include $(JSR_120_DIR)/build/config/common_defs.gmk
 
-# Add java files to classes.zip
-$(MIDP_CLASSES_ZIP):: $(SUBSYSTEM_JSR_120_JAVA_FILES)
-	$(appendjavafiles)
-
-# Copy and filter JSR120 source in JSR_120_SOURCE_OUTPUT_DIR
-jsr_120_source_bundle:: $(SOURCE_OUTPUT_DIR)
-	$(AT)$(call source_bundle_filter,$(JSR_120_DIR),$(JSR_120_SOURCE_OUTPUT_DIR),src/share src/cldc_application build/share build/cldc_application)
+JTWI_I3TEST_JAVA_FILES              += $(SUBSYSTEM_JSR_120_I3TEST_JAVA_FILES)
+JTWI_NATIVE_FILES                   += $(SUBSYSTEM_JSR_120_NATIVE_FILES)
+EXTRA_INCLUDES                      += $(SUBSYSTEM_JSR_120_EXTRA_INCLUDES)
+EXTRA_CFLAGS                        += $(JSR_120_EXTRA_CFLAGS)
+SUBSYSTEM_CONFIGURATION_INPUT_FILES += $(JSR_120_PROPERTY_FILES)

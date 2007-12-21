@@ -1,27 +1,27 @@
 /*
  *
  *
- * Copyright  1990-2007 Sun Microsystems, Inc. All Rights Reserved.
+ * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version
- * 2 only, as published by the Free Software Foundation.
+ * 2 only, as published by the Free Software Foundation. 
  * 
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License version 2 for more details (a copy is
- * included at /legal/license.txt).
+ * included at /legal/license.txt). 
  * 
  * You should have received a copy of the GNU General Public License
  * version 2 along with this work; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ * 02110-1301 USA 
  * 
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, CA 95054 or visit www.sun.com if you need additional
- * information or have any questions.
+ * information or have any questions. 
  */
 
 /*
@@ -43,25 +43,24 @@
 
 #ifdef ENABLE_MIDP
 #include <midpServices.h>
-//#include <commonKNIMacros.h>
-//#include <ROMStructs.h>
+#include <commonKNIMacros.h>
+#include <ROMStructs.h>
 #include <midpError.h>
 #include <midp_properties_port.h>
 #include <midp_logging.h>
 #include <midpResourceLimit.h>
 #endif
 
-
-//#if (ENABLE_CDC == 1)
+#ifdef ENABLE_CDC
 #ifdef ENABLE_PCSL
 #include <pcsl_memory.h>
 #else
   #define pcsl_mem_malloc malloc
   #define pcsl_mem_free free
 #endif
-//#endif
+#endif
 
-#if (ENABLE_CDC == 1)
+#ifdef ENABLE_CDC
 #define JSR120_KNI_LAYER
 #ifdef JSR_120_ENABLE_JUMPDRIVER
 #include <jsr120_jumpdriver.h>
@@ -87,11 +86,15 @@
 /*
  * Protocol methods
  */
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
 static void wma_setBlockedCBSHandle(int msgID, int eventType);
 #endif
 
 unsigned char cbsBuffer[sizeof(CbsMessage)];
+
+/** Close flag. */
+static int isClosed = 0;
+
 
 /**
  * Open a CBS connection.
@@ -117,6 +120,9 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_open0) {
     /* The status from registering a listener with the message ID. */
     WMA_STATUS status = WMA_ERR;
 
+    /* Set closed flag to false */
+    isClosed = 0;
+
     /* Pick up the CBS message ID. */
     msgID = KNI_GetParameterAsInt(1);
 
@@ -127,10 +133,10 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_open0) {
 
         do {
             /* Register the message ID with the message pool. */
-            if (jsr120_cbs_is_midlet_listener_registered((jchar)msgID) == WMA_ERR) {
+            if (jsr120_cbs_is_midlet_msgID_registered((jchar)msgID) == WMA_ERR) {
 
                 /* Fetch a unique handle that identifies this CBS communication session. */
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
                 handle = (int)(pcsl_mem_malloc(1));
 #else
 #ifdef JSR_120_ENABLE_JUMPDRIVER
@@ -143,7 +149,7 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_open0) {
                     break;
                 }
 
-                status = jsr120_cbs_register_midlet_listener((jchar)msgID, msid,
+                status = jsr120_cbs_register_midlet_msgID((jchar)msgID, msid,
                                                           handle);
                 if (status == WMA_ERR) {
                     KNI_ThrowNew(midpIOException, "Port already in use.");
@@ -159,44 +165,6 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_open0) {
 
     KNI_ReturnInt(handle);
 }
-
-/**
- * Internal helper function implementing connection close routine
- *
- * @param port The port associated with this connection.
- * @param handle The handle of the open CBS message connection.
- * @param deRegister Deregistration os the port when parameter is 1.
- */
-static void closeConnection(int msgID, int handle, int deRegister) {
-
-    if (msgID > 0 && handle != 0) {
-
-#if (ENABLE_CDC != 1)
-        /* Unblock any blocked threads. */
-        jsr120_cbs_unblock_thread((int)handle, WMA_CBS_READ_SIGNAL);
-#else
-#ifdef JSR_120_ENABLE_JUMPDRIVER
-        jumpEventHappens((JUMPEvent)handle);
-#endif
-#endif
-
-        if (deRegister) {
-            /* Unregister the CBS port from the CBS pool. */
-            jsr120_cbs_unregister_midlet_listener((jchar)msgID);
-
-            /* Release the handle associated with this connection. */
-#if (ENABLE_CDC != 1)
-            pcsl_mem_free((void *)handle);
-#else
-#ifdef JSR_120_ENABLE_JUMPDRIVER
-            jumpEventDestroy((JUMPEvent)handle);
-#endif
-#endif
-        }
-
-    }
-}
-
 
 /**
  * Close a CBS connection.
@@ -216,11 +184,39 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_close0) {
     /** Deregistration flag. */
     int deRegister;
 
+    /* Set closed flag to true */
+    isClosed = 1;
+
     msgID = KNI_GetParameterAsInt(1);
     handle = KNI_GetParameterAsInt(2);
     deRegister = KNI_GetParameterAsInt(3);
 
-    closeConnection(msgID, handle, deRegister);
+    if (msgID > 0 && handle != 0) {
+
+#ifndef ENABLE_CDC
+        /* Unblock any blocked threads. */
+        jsr120_cbs_unblock_thread((int)handle, WMA_CBS_READ_SIGNAL);
+#else
+#ifdef JSR_120_ENABLE_JUMPDRIVER
+        jumpEventHappens((JUMPEvent)handle);
+#endif
+#endif
+
+        if (deRegister) {
+            /* Unregister the CBS port from the CBS pool. */
+            jsr120_cbs_unregister_midlet_msgID((jchar)msgID);
+
+            /* Release the handle associated with this connection. */
+#ifndef ENABLE_CDC
+            pcsl_mem_free((void *)handle);
+#else
+#ifdef JSR_120_ENABLE_JUMPDRIVER
+            jumpEventDestroy((JUMPEvent)handle);
+#endif
+#endif
+        }
+
+    }
 
     KNI_ReturnInt(status);
 }
@@ -237,7 +233,7 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_close0) {
  */
 KNIEXPORT KNI_RETURNTYPE_INT
 KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_receive0) {
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
     MidpReentryData* info = (MidpReentryData*)SNI_GetReentryData(NULL);
 #endif
 
@@ -256,18 +252,8 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_receive0) {
     /* The midlet suite name for this connection. */
     AppIdType msid = UNUSED_APP_ID;
 
-    /* Mirror for ProtocolBase.open field */
-    jboolean isOpen;
-
-    KNI_StartHandles(5);
-
-    KNI_DeclareHandle(this);
-    KNI_DeclareHandle(thisClass);
-    KNI_GetThisPointer(this);
-    KNI_GetObjectClass(this, thisClass);
-    isOpen = KNI_GetBooleanField(this, KNI_GetFieldID(thisClass, "open", "Z"));
-
-    if (isOpen) { /* No close in progress */
+    if (!isClosed) { /* No close in progress */
+        KNI_StartHandles(3);
 
         /* This is the handle to the serialized CBSPacket class fields. */
         KNI_DeclareHandle(messageClazz);
@@ -284,7 +270,7 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_receive0) {
 
         do {
             /* If this is the first time, peek into the pool for a message. */
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
             if (info == NULL) {
 #endif
                 pCbsData = jsr120_cbs_pool_peek_next_msg((jchar)msgID);
@@ -296,7 +282,7 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_receive0) {
                  */
                 if (pCbsData == NULL) {
 
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
                     /* Wait for a message to arrive in the pool. */
                     wma_setBlockedCBSHandle(handle, WMA_CBS_READ_SIGNAL);
 #else
@@ -309,7 +295,7 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_receive0) {
 #endif
 #endif
                 }
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
             } else {
 
                 /* Re-entry */
@@ -324,6 +310,15 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_receive0) {
 
                 /* Fetch message data, while clearing pool entry to make room. */
                 if ((pCbsData = jsr120_cbs_pool_retrieve_next_msg(msgID)) != NULL) {
+
+                    /*
+                     * A message has been retrieved successfully. Notify
+                     * the platform.
+                     */
+                    jsr120_notify_incoming_cbs(pCbsData->encodingType,
+                                               pCbsData->msgID,
+                                               pCbsData->msgBuffer,
+                                               pCbsData->msgLen);
 
                     /*
                      * At this point, the message entry from the pool has been removed,
@@ -401,9 +396,8 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_receive0) {
         /* Delete the message data. */
         jsr120_cbs_delete_msg(pCbsData);
 
+        KNI_EndHandles();
     }
-
-    KNI_EndHandles();
 
     KNI_ReturnInt(messageLength);
 }
@@ -420,27 +414,18 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_receive0) {
  */
 KNIEXPORT KNI_RETURNTYPE_INT
 KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_waitUntilMessageAvailable0) {
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
     MidpReentryData *info = (MidpReentryData*)SNI_GetReentryData(NULL);
 #endif
 
     int msgID;
     int handle;
     int messageLength = -1;
-    jboolean isOpen;
 
     /* Pointer to CBS message data. */
     CbsMessage* pCbsData = NULL;
 
-    KNI_StartHandles(2);
-
-    KNI_DeclareHandle(this);
-    KNI_DeclareHandle(thisClass);
-    KNI_GetThisPointer(this);
-    KNI_GetObjectClass(this, thisClass);
-    isOpen = KNI_GetBooleanField(this, KNI_GetFieldID(thisClass, "open", "Z"));
-
-    if (isOpen) { /* No close in progress */
+    if (!isClosed) { /* No close in progress */
         msgID = KNI_GetParameterAsInt(1);
         handle = KNI_GetParameterAsInt(2);
 
@@ -461,7 +446,7 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_waitUntilMessageAvailable0) {
                  messageLength = pCbsData->msgLen;
             } else {
 
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
                 if (!info) {
                      /* Block and wait for a message. */
                      wma_setBlockedCBSHandle(handle, WMA_CBS_READ_SIGNAL);
@@ -480,7 +465,7 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_waitUntilMessageAvailable0) {
 #endif
 #endif
 
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
                 } else {
                      /* May have been awakened due to interrupt. */
                      messageLength = -1;
@@ -489,13 +474,10 @@ KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_waitUntilMessageAvailable0) {
             }
         }
     }
-
-    KNI_EndHandles();
-
     KNI_ReturnInt(messageLength);
 }
 
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
 /**
  * Marks an open connection as being blocked on a CBS operation. The
  * blocked status of the connection is stored in the current Java
@@ -532,24 +514,13 @@ wma_setBlockedCBSHandle(int msgID, int eventType) {
  */
 KNIEXPORT KNI_RETURNTYPE_VOID
 KNIDECL(com_sun_midp_io_j2me_cbs_Protocol_finalize) {
-    int msgID;
-    int handle;
-    jboolean isOpen;
 
-    KNI_StartHandles(2);
-    KNI_DeclareHandle(this);
-    KNI_DeclareHandle(thisClass);
+    KNI_StartHandles(1);
+    KNI_DeclareHandle(instance);
 
-    KNI_GetThisPointer(this);
-    KNI_GetObjectClass(this, thisClass);
-    isOpen = KNI_GetBooleanField(this, KNI_GetFieldID(thisClass, "open", "Z"));
+    KNI_GetThisPointer(instance);
 
-    if (isOpen) {
-        msgID = KNI_GetIntField(this, KNI_GetFieldID(thisClass, "m_imsgid", "I"));
-        handle = KNI_GetIntField(this, KNI_GetFieldID(thisClass, "connHandle", "I"));
-
-        closeConnection(msgID, handle, 1);
-    }
+//    REPORT_ERROR(LC_WMA, "Stubbed out: Java_com_sun_midp_io_j2me_cbs_Protocol_finalize");
 
     KNI_EndHandles();
 

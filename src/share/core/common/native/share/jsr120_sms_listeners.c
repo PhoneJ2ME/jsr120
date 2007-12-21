@@ -1,35 +1,35 @@
 /*
  *
  *
- * Copyright  1990-2007 Sun Microsystems, Inc. All Rights Reserved.
+ * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version
- * 2 only, as published by the Free Software Foundation.
+ * 2 only, as published by the Free Software Foundation. 
  * 
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License version 2 for more details (a copy is
- * included at /legal/license.txt).
+ * included at /legal/license.txt). 
  * 
  * You should have received a copy of the GNU General Public License
  * version 2 along with this work; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ * 02110-1301 USA 
  * 
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, CA 95054 or visit www.sun.com if you need additional
- * information or have any questions.
+ * information or have any questions. 
  */
 
 #include <string.h>
 #include <kni.h>
 #include <sni.h>
 #ifdef ENABLE_MIDP
-//#include <commonKNIMacros.h>
-//#include <ROMStructs.h>
+  #include <commonKNIMacros.h>
+  #include <ROMStructs.h>
   //#include <midp_thread.h>
   #include <midpServices.h>
   #include <push_server_export.h>
@@ -37,7 +37,7 @@
   #include "wmaInterface.h"
 #endif
 
-#if (ENABLE_CDC == 1)
+#ifdef ENABLE_CDC
 #ifdef JSR_120_ENABLE_JUMPDRIVER
   #include <jsr120_jumpdriver.h>
   #include <JUMPEvents.h>
@@ -51,8 +51,6 @@
 #include <jsr120_sms_listeners.h>
 #include <jsr120_sms_protocol.h>
 #include <app_package.h>
-//#include <push_server_resource_mgmt.h> //pushgetfiltermms
-#include <wmaPushRegistry.h> // jsr120_check_filter
 
 /*
  * Listeners registered by a currently running midlet
@@ -74,22 +72,19 @@ static WMA_STATUS jsr120_sms_midlet_listener(jint port, SmsMessage* wma_smsstruc
 static WMA_STATUS jsr120_sms_push_listener(jint port, SmsMessage* wma_smsstruct,
                                               void* userData);
 static WMA_STATUS jsr120_invoke_sms_listeners(SmsMessage* sms, ListElement *listeners);
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
 static JVMSPI_ThreadID
 jsr120_get_blocked_thread_from_handle(long handle, jint waitingFor);
+static JVMSPI_ThreadID jsr120_get_blocked_thread_from_signal(jint waitingFor);
 #endif
-static WMA_STATUS jsr120_register_sms_listener(jchar smsPort,
-                                               AppIdType msid,
-                                               sms_listener_t* listener,
-                                               void* userData, ListElement **listeners,
-                                               jboolean registerPort);
-static WMA_STATUS jsr120_unregister_sms_listener(jchar smsPort, sms_listener_t* listener,
-                                                 ListElement **listeners,
-                                                 jboolean unregisterPort);
-static WMA_STATUS jsr120_is_sms_listener_registered(jchar smsPort, ListElement *listeners);
+static WMA_STATUS jsr120_register_sms_port(jchar smsPort,
+                                              AppIdType msid,
+                                              sms_listener_t* listener,
+                                              void* userData, ListElement **listeners);
+static WMA_STATUS jsr120_unregister_sms_port(jchar smsPort, sms_listener_t* listener,
+                                                ListElement **listeners);
+static WMA_STATUS jsr120_is_sms_port_registered(jchar smsPort, ListElement *listeners);
 static void jsr120_sms_delete_all_msgs(AppIdType msid, ListElement *head);
-static WMA_STATUS jsr120_is_sms_listener_registered_by_msid(jchar smsPort,
-                                                            ListElement *listeners, AppIdType msid);
 
 /**
  * Invoke registered listeners for the port specified in the SMS
@@ -102,7 +97,7 @@ static WMA_STATUS jsr120_is_sms_listener_registered_by_msid(jchar smsPort,
  *                 <code>WMA_ERR</code> otherwise
  */
 static WMA_STATUS jsr120_invoke_sms_listeners(SmsMessage* sms, ListElement *listeners) {
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
     ListElement* callback;
     WMA_STATUS unblocked = WMA_ERR;
 
@@ -139,7 +134,7 @@ void jsr120_sms_message_arrival_notifier(SmsMessage* smsMessage) {
     /*
      * First invoke listeners for current midlet
      */
-    if (sms_midlet_listeners != NULL) {
+    if(sms_midlet_listeners != NULL) {
         unblocked = jsr120_invoke_sms_listeners(smsMessage, sms_midlet_listeners);
     }
 
@@ -147,7 +142,6 @@ void jsr120_sms_message_arrival_notifier(SmsMessage* smsMessage) {
      * If a listener hasn't been invoked, try the push Listeners
      */
     if (unblocked == WMA_ERR && sms_push_listeners != NULL) {
-        pushsetcachedflag("sms://:", smsMessage->destPortNum);
         unblocked = jsr120_invoke_sms_listeners(smsMessage, sms_push_listeners);
     }
 
@@ -156,27 +150,34 @@ void jsr120_sms_message_arrival_notifier(SmsMessage* smsMessage) {
 /*
  * See jsr120_sms_listeners.h for documentation
  */
-WMA_STATUS jsr120_sms_is_message_expected(jchar port, char* addr) {
+void jsr120_sms_message_sent_notifier() {
+#ifndef ENABLE_CDC
+    /*
+     * An SMS message has been sent. So unblock thread
+     * blocked on WMA_SMS_WRITE_SIGNAL.
+     */
+    JVMSPI_ThreadID id = jsr120_get_blocked_thread_from_signal(WMA_SMS_WRITE_SIGNAL);
 
-    if (WMA_OK == jsr120_is_sms_midlet_listener_registered(port)) {
-        return WMA_OK;
+    if (id != 0) {
+	midp_thread_unblock(id);
     }
-
-    if (WMA_OK == jsr120_is_sms_push_listener_registered(port)) {
-        char* filter = pushgetfilter("sms://:", port);
-        if (filter == NULL || jsr120_check_filter(filter, addr)) {
-            return WMA_OK;
-        }
-    }
-
-    return WMA_ERR;
+#else
+    /* IMPL NOTE implement this */
+#endif
 }
 
-/*
- * See jsr120_sms_listeners.h for documentation
+#ifndef ENABLE_CDC
+/**
+ * Find the first thread that can be unblocked for a given
+ * signal type
+ *
+ * @param signalType Enumerated signal type
+ *
+ * @return JVMSPI_ThreadID Java thread id than can be unblocked
+ *         0 if no matching thread can be found
+ *
  */
-void jsr120_sms_message_sent_notifier(int handle, WMA_STATUS result) {
-#if (ENABLE_CDC != 1)
+static JVMSPI_ThreadID jsr120_get_blocked_thread_from_signal(jint waitingFor) {
     JVMSPI_BlockedThreadInfo *blocked_threads;
     jint n;
     jint i;
@@ -187,116 +188,75 @@ void jsr120_sms_message_sent_notifier(int handle, WMA_STATUS result) {
 	MidpReentryData *p =
             (MidpReentryData*)(blocked_threads[i].reentry_data);
 	if (p != NULL) {
-            if (p->waitingFor == WMA_SMS_WRITE_SIGNAL) {
-              if (handle == 0 || handle == p->descriptor) {
-                p->status = result;
-                midp_thread_unblock(blocked_threads[i].thread_id);
-		return;
-              }
+
+            if (waitingFor == (int)p->waitingFor) {
+		return blocked_threads[i].thread_id;
             }
 
 	}
 
     }
-#else
-    /* IMPL NOTE implement this */
+
+    return 0;
+
+}
 #endif
+
+/*
+ * See jsr120_sms_listeners.h for documentation
+ */
+WMA_STATUS jsr120_is_sms_midlet_port_registered(jchar port) {
+    return jsr120_is_sms_port_registered(port, sms_midlet_listeners);
 }
 
 /*
  * See jsr120_sms_listeners.h for documentation
  */
-WMA_STATUS jsr120_is_sms_midlet_listener_registered(jchar port) {
-    return jsr120_is_sms_listener_registered(port, sms_midlet_listeners);
-}
-
-/**
- * Check if an SMS port is currently registered for given msid
- *
- * @param smsPort the SMS port to check
- * @param listeners List of listeners in which to check
- * @param msid suite id to check for
- *
- * @return <code>WMA_OK</code> if a given application is listening to this port,
- *         <code>WMA_ERR</code> otherwise
- *
- */
-static WMA_STATUS jsr120_is_sms_listener_registered_by_msid(
-    jchar smsPort, ListElement *listeners, AppIdType msid) {
-    ListElement *entry = jsr120_list_get_by_number(listeners, smsPort);
-    return entry != NULL && entry->msid == msid ? WMA_OK : WMA_ERR;
-}
-
-/*
- * See jsr120_sms_listeners.h for documentation
- */
-WMA_STATUS jsr120_register_sms_midlet_listener(jchar port,
+WMA_STATUS jsr120_register_sms_midlet_port(jchar port,
                                               AppIdType msid,
                                               jint handle) {
-    jboolean isPushRegistered = jsr120_is_sms_listener_registered_by_msid(
-        port, sms_push_listeners, msid) == WMA_OK;
-
-    return jsr120_register_sms_listener(port, msid, jsr120_sms_midlet_listener,
-                                        (void *)handle,
-                                        &sms_midlet_listeners,
-                                        !isPushRegistered);
+    return jsr120_register_sms_port(port, msid, jsr120_sms_midlet_listener,
+                                    (void *)handle,
+                                    &sms_midlet_listeners);
 }
 
 /*
  * See jsr120_sms_listeners.h for documentation
  */
-WMA_STATUS jsr120_unregister_sms_midlet_listener(jchar port) {
-    /*
-     * As there was open connection push can be registered only for current suite
-     * thus no need to check for suite ID
-     */
-    jboolean hasNoPushRegistration = jsr120_is_sms_push_listener_registered(port) == WMA_ERR;
-
-    return jsr120_unregister_sms_listener(port, jsr120_sms_midlet_listener,
-                                          &sms_midlet_listeners, hasNoPushRegistration);
+WMA_STATUS jsr120_unregister_sms_midlet_port(jchar port) {
+    return jsr120_unregister_sms_port(port, jsr120_sms_midlet_listener,
+                                      &sms_midlet_listeners);
 }
 
 /*
  * See jsr120_sms_listeners.h for documentation
  */
-WMA_STATUS jsr120_is_sms_push_listener_registered(jchar port) {
-    return jsr120_is_sms_listener_registered(port, sms_push_listeners);
+WMA_STATUS jsr120_is_sms_push_port_registered(jchar port) {
+    return jsr120_is_sms_port_registered(port, sms_push_listeners);
 }
 
 /*
  * See jsr120_sms_listeners.h for documentation
  */
-WMA_STATUS jsr120_register_sms_push_listener(jchar port,
+WMA_STATUS jsr120_register_sms_push_port(jchar port,
                              AppIdType msid, jint handle) {
-
-    jboolean isMIDletRegistered = jsr120_is_sms_listener_registered_by_msid(
-        port, sms_midlet_listeners, msid) == WMA_OK;
-
-    return jsr120_register_sms_listener(port, msid, jsr120_sms_push_listener,
-                                        (void *)handle,
-                                        &sms_push_listeners,
-                                        !isMIDletRegistered);
+    return jsr120_register_sms_port(port, msid, jsr120_sms_push_listener,
+                                    (void *)handle,
+                                    &sms_push_listeners);
 }
 
 /*
  * See jsr120_sms_listeners.h for documentation
  */
-WMA_STATUS jsr120_unregister_sms_push_listener(jchar port) {
-    /*
-     * As there was push push registration connection can be open only for current suite
-     * thus no need to check for suite ID
-     */
-    jboolean hasNoConnection = jsr120_is_sms_midlet_listener_registered(port) == WMA_ERR;
-
-    return jsr120_unregister_sms_listener(port, jsr120_sms_push_listener, &sms_push_listeners,
-                                          hasNoConnection);
+WMA_STATUS jsr120_unregister_sms_push_port(jchar port) {
+    return jsr120_unregister_sms_port(port, jsr120_sms_push_listener, &sms_push_listeners);
 }
 
 /*
  * See jsr120_sms_listeners.h for documentation
  */
 WMA_STATUS jsr120_sms_unblock_thread(jint handle, jint waitingFor) {
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
     JVMSPI_ThreadID id = jsr120_get_blocked_thread_from_handle((long)handle, waitingFor);
     if (id != 0) {
 	midp_thread_unblock(id);
@@ -316,7 +276,7 @@ WMA_STATUS jsr120_sms_unblock_thread(jint handle, jint waitingFor) {
 
 }
 
-#if (ENABLE_CDC != 1)
+#ifndef ENABLE_CDC
 /**
  * Find a first thread that can be unblocked for  a given handle
  * and signal type
@@ -417,16 +377,13 @@ static WMA_STATUS jsr120_sms_push_listener(jint port, SmsMessage* smsmessg,
 
 /**
  * Listen for SMS messages on a given port.
- * This function optionally calls native API to listen to incoming SMS messages and
+ * This function calls native API to listen to incoming SMS messages and
  * optionally registers a user supplied callback when a message has arrived and
  * has been inserted into the SMS pool.
  * The callback function will be called with the incoming SMS and the user supplied
  * data (userData).
  * The SMS is kept in the SMS pool until function SMSPool_getNextSms is called.
  *
- * If KNI_FALSE is passed as value of registerPort no native API will be
- * called to register this port. This is important when port if already registered
- * for given MIDlet (when opening connection on port which has push registration)
  * If NULL is sent as a callback function, no listener will be called, and the SMS
  * is inserted into the SMS pool.
  *
@@ -434,24 +391,18 @@ static WMA_STATUS jsr120_sms_push_listener(jint port, SmsMessage* smsmessg,
  * @param listener listener to be invoked on message arrival
  * @param userData
  * @param listeners List of listeners in which to be registered.
- * @param registerPort set if need to register Java runtime within
- *         platform to receive notifications on message arrival 
  *
  * @return <code>WMA_OK</code> if successful,
  *         <code>WMA_ERR</code> if port already registered or
  *	    native registration failed.
  *
  */
-static WMA_STATUS jsr120_register_sms_listener(
-    jchar smsPort, AppIdType msid, sms_listener_t* listener, void* userData,
-    ListElement **listeners, jboolean registerPort) {
-
+static WMA_STATUS jsr120_register_sms_port(jchar smsPort,
+                     AppIdType msid, sms_listener_t* listener,
+                     void* userData, ListElement **listeners) {
     WMA_STATUS ok = WMA_ERR;
-    if (jsr120_is_sms_listener_registered(smsPort, *listeners) == WMA_ERR) {
-        ok = WMA_OK;
-        if (registerPort) {
-            ok = jsr120_add_sms_listening_port(smsPort);
-        }
+    if (jsr120_is_sms_port_registered(smsPort, *listeners) == WMA_ERR) {
+	ok = jsr120_add_sms_listening_port(smsPort);
 	jsr120_list_new_by_number(listeners, smsPort, msid, userData, (void*)listener);
     }
     return ok;
@@ -459,31 +410,27 @@ static WMA_STATUS jsr120_register_sms_listener(
 
 /**
  * Stop listening for SMS messages on a given port.
- * This function optionally calls native API to stop listening to incoming
- * SMS messages and unregister user's callback
+ * This function calls native API to stop listening to incoming SMS messages and
+ * unregister user'scallback
  *
  * @param smsPort the SMS port to listen to
  * @param listener
  * @param userData
  * @param listeners List of listeners from which to be unregistered.
- * @param unregisterPort set if need to unregister Java runtime within
- *         platform to stop listening to incoming messages
  *
  * @return <code>WMA_OK</code> if successful,
  *         <code>WMA_ERR</code> otherwise
  *
  */
-static WMA_STATUS jsr120_unregister_sms_listener(
-    jchar smsPort, sms_listener_t* listener, ListElement **listeners,
-    jboolean unregisterPort) {
-    
+static WMA_STATUS jsr120_unregister_sms_port(jchar smsPort,
+                                                sms_listener_t* listener,
+                                                ListElement **listeners) {
     WMA_STATUS ok = WMA_ERR;
 
-    if (jsr120_is_sms_listener_registered(smsPort, *listeners) == WMA_OK) {
+    if (jsr120_is_sms_port_registered(smsPort, *listeners) == WMA_OK) {
 	ok = WMA_OK;
-        jsr120_list_unregister_by_number(listeners, smsPort, (void*)listener);
-	if (jsr120_is_sms_listener_registered(smsPort, *listeners) == WMA_ERR &&
-            unregisterPort) {
+	jsr120_list_unregister_by_number(listeners, smsPort, (void*)listener);
+	if (jsr120_is_sms_port_registered(smsPort, *listeners) == WMA_ERR) {
             ok = jsr120_remove_sms_listening_port(smsPort);
 	}
 
@@ -501,7 +448,7 @@ static WMA_STATUS jsr120_unregister_sms_listener(
  *         <code>WMA_ERR</code> otherwise
  *
  */
-static WMA_STATUS jsr120_is_sms_listener_registered(jchar smsPort, ListElement *listeners) {
+static WMA_STATUS jsr120_is_sms_port_registered(jchar smsPort, ListElement *listeners) {
     return ((jsr120_list_get_by_number(listeners,smsPort) != NULL) ? WMA_OK : WMA_ERR);
 }
 

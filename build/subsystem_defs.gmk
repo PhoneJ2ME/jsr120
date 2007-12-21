@@ -22,26 +22,16 @@
 # information or have any questions. 
 #
 
-include $(JSR_120_DIR)/build/config/common_rules.gmk
+ifneq ($(TARGET_VM),cldc_vm)
 
-$(JSR_120_INITIALIZER): $(CONFIGURATOR_JAR_FILE)
-	$(AT)$(call generateJSRInitializer,$(JSR_120_PROPERTY_FILES),$(JSR_120_GENERATED_DIR),$(JSR_120_INIT_PACKAGE),$@,$(JSR_120_LIB_NAME))
+# CDC-specific build
+#
+include $(JSR_120_DIR)/build/cdc_share/cdc_defs.gmk
 
-ifeq ($(USE_MIDP),true)
-JSR_120_DEPS=$(PS)$(MIDP_OUTPUT_DIR)/classes
+else
+
+# CLDC-specific build
+#
+include $(JSR_120_DIR)/build/cldc_application/cldc_defs.gmk
+
 endif
-
-$(JSR_120_JAR): $(JPP_CLASS_FILES) $(SUBSYSTEM_JSR_120_JAVA_FILES)
-	$(call compileJSROP,jsr120,$(JSR_120_BUILD_DIR)/classes,$(SUBSYSTEM_JSR_120_JAVA_FILES),$(JSR_120_DEPS))
-	$(call makeJSROPJar,$(JSR_120_JAR),$(JSR_120_BUILD_DIR)/classes)
-
-$(JSR_120_NATIVE_OBJS): javacall_lib
-
-$(JSR_120_NATIVE_LIB): $(JSR_120_NATIVE_OBJS) $(ABSTRACTIONS_NATIVE_LIBRARY)
-	@echo "Linking $@"
-	$(AT)$(call makeSharedLibrary, $(JSR_120_NATIVE_OBJS))
-
-# Copy and filter JSR 120 source in JSR_120_SOURCE_OUTPUT_DIR
-jsr_120_source_bundle:: $(JSR_120_DIR)
-	$(AT)$(call source_bundle_filter,$(JSR_120_DIR),$(JSR_120_SOURCE_OUTPUT_DIR),src/jump_application src/cdc_share build/cdc_share)
-

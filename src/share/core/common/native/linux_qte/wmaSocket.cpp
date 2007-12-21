@@ -1,27 +1,27 @@
 /*
  *   
  *
- * Copyright  1990-2007 Sun Microsystems, Inc. All Rights Reserved.
+ * Copyright  1990-2006 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version
- * 2 only, as published by the Free Software Foundation.
+ * 2 only, as published by the Free Software Foundation. 
  * 
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License version 2 for more details (a copy is
- * included at /legal/license.txt).
+ * included at /legal/license.txt). 
  * 
  * You should have received a copy of the GNU General Public License
  * version 2 along with this work; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ * 02110-1301 USA 
  * 
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, CA 95054 or visit www.sun.com if you need additional
- * information or have any questions.
+ * information or have any questions. 
  * 
  * This source file is specific for Qt-based configurations.
  */
@@ -45,7 +45,6 @@
 #include <jsr120_sms_listeners.h>
 #include <jsr120_cbs_structs.h>
 #include <jsr120_cbs_pool.h>
-#include <jsr120_cbs_listeners.h>
 #if ENABLE_JSR_205
 #include <jsr205_mms_structs.h>
 #include <jsr205_mms_pool.h>
@@ -215,12 +214,12 @@ void WMASocket::writableSlot(int socket) {
      switch (sockProtocol) {
 
          case WMA_SMS_PROTOCOL:
-             jsr120_sms_message_sent_notifier(0, WMA_OK);
+             jsr120_sms_message_sent_notifier();
              break;
 
 #if ENABLE_JSR_205
          case WMA_MMS_PROTOCOL:
-             jsr205_mms_message_sent_notifier(0, WMA_OK);
+             jsr205_mms_message_sent_notifier();
              break;
 #endif
 
@@ -280,7 +279,6 @@ void WMASocket::readableSlot(int socket) {
                     sms->timeStamp = getLongLong(p, &index);
                     /* The next field is the recipient's phone number */
                     recipientPhone = getString(p, &index);
-                    pcsl_mem_free(recipientPhone);
                     /* The next field is the sender's phone number */
                     sms->msgAddr = getString(p, &index);
 
@@ -308,10 +306,14 @@ void WMASocket::readableSlot(int socket) {
                      */
                     if (filter == NULL || checkfilter(filter, sms->msgAddr)) {
 
+                        /* 
+                         * Notify Push that a message has arrived and 
+                         * is being cached.
+                         */
+                        pushsetcachedflag("sms://:", sms->destPortNum); 
+
                         /* add message to pool */
                         jsr120_sms_pool_add_msg(sms);
-                        /* Notify all listeners of the new message. */
-                        jsr120_sms_message_arrival_notifier(sms);
                     }
 
                     if (filter != NULL) {
@@ -340,10 +342,14 @@ void WMASocket::readableSlot(int socket) {
                         cbs->msgBuffer = (unsigned char*)msg;
                     }
 
+                    /* 
+                     * Notify Push that a message has arrived and 
+                     * is being cached.
+                     */
+                    pushsetcachedflag("cbs://:", cbs->msgID); 
+
                     /* Add message to pool. */
                     jsr120_cbs_pool_add_msg(cbs);
-                    /* Notify all listeners of the new message. */
-                    jsr120_cbs_message_arrival_notifier(cbs);
                 }
                 break;
 
@@ -371,6 +377,7 @@ void WMASocket::readableSlot(int socket) {
 
                     /* Notify the platform that a message has arrived. */
                     mmsHeader = createMmsHeader(mms);
+                    MMSNotification(mmsHeader);
                     destroyMMSHeader(mmsHeader);
 
                     /*
@@ -385,9 +392,16 @@ void WMASocket::readableSlot(int socket) {
                      */
                     if (filter == NULL || checkfilter(filter, mms->replyToAppID)) {
 
-                        jsr205_mms_pool_add_msg(mms);
-                        /* Notify all listeners of the new message. */
-                        jsr205_mms_message_arrival_notifier(mms);
+                        /* 
+                         * Notify Push that a message has arrived and 
+                         * is being cached.
+                         */
+                        pushsetcachedflagmms("mms://:", mms->appID); 
+
+                        /* When a fetch is confirmed, add message to pool. */
+                        if (jsr205_fetch_mms() == WMA_OK) {
+                            jsr205_mms_pool_add_msg(mms);
+                        }
                     }
 
                     pcsl_mem_free(filter);
