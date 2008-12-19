@@ -1,7 +1,7 @@
 /*
  *
  *
- * Copyright  1990-2007 Sun Microsystems, Inc. All Rights Reserved.
+ * Copyright  1990-2008 Sun Microsystems, Inc. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  * 
  * This program is free software; you can redistribute it and/or
@@ -245,17 +245,21 @@ void jsr120_sms_pool_finalize() {
  * Increase the number of messages in the pool by one.
  */
 static void jsr120_sms_pool_increase_count() {
+    MUTEX_LOCK
     SMSPool_count++;
+    MUTEX_UNLOCK
 }
 
 /**
  * Decrease the number of messages in the pool by one.
  */
 static void jsr120_sms_pool_decrease_count()     {
+    MUTEX_LOCK
     SMSPool_count--;
     if (SMSPool_count < 0) {
         SMSPool_count = 0;
     }
+    MUTEX_UNLOCK
 }
 
 /**
@@ -274,9 +278,11 @@ static jint jsr120_sms_pool_get_count() {
  * the oldest messages until the pool has room for only one more message.
  */
 static void jsr120_sms_pool_check_pool_quota() {
+    MUTEX_LOCK
     while (jsr120_sms_pool_get_count() >= MAX_SMS_MESSSAGES_IN_POOL) {
         jsr120_sms_pool_delete_next_msg();
     }
+    MUTEX_UNLOCK
 }
 
 /**
@@ -296,9 +302,9 @@ WMA_STATUS jsr120_sms_pool_add_msg(SmsMessage* smsMessage) {
 
     if (smsMessage == NULL) { return WMA_ERR;}
 
+    MUTEX_LOCK
     jsr120_sms_pool_check_pool_quota();
 
-    MUTEX_LOCK
     newItem = jsr120_list_new_by_number(NULL, smsMessage->destPortNum,
         UNUSED_APP_ID, (void*)smsMessage, 0);
     jsr120_list_add_last(&SMSPool_smsMessages, newItem);
@@ -322,7 +328,9 @@ WMA_STATUS jsr120_sms_pool_add_msg(SmsMessage* smsMessage) {
 WMA_STATUS jsr120_sms_pool_get_next_msg(jchar smsPort, SmsMessage* out) {
 
     SmsMessage* sms;
+    MUTEX_LOCK
     sms = jsr120_sms_pool_retrieve_next_msg(smsPort);
+    MUTEX_UNLOCK
     if (sms) {
         if (out) {
             jsr120_sms_copy_msg(sms, out);
